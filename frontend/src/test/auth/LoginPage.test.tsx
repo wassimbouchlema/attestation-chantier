@@ -6,7 +6,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AuthProvider } from "../../features/auth/AuthProvider";
-import { LoginPage } from "../../features/auth/LoginPage";
+import { LoginPage } from "../../pages/Login/LoginPage";
 import { server } from "../server";
 
 const renderLoginPage = () => {

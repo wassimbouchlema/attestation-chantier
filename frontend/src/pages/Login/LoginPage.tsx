@@ -3,12 +3,12 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
 import { ErreurAuthentification, ErreurReseauOuServeur } from "../../api/auth";
+import { useAuth } from "../../features/auth/useAuth";
+import { resolveHomePath } from "../../features/auth/roleHome";
 import { AppShell } from "../../layout/AppShell";
 import { SessionLoader } from "../../layout/SessionLoader";
 import { Surface } from "../../layout/Surface";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
-import { useAuth } from "./useAuth";
-import { resolveHomePath } from "./roleHome";
 
 const MESSAGE_CHAMP_REQUIS = "Ce champ est obligatoire.";
 const MESSAGE_ERREUR_GENERIQUE = "Une erreur est survenue. Veuillez réessayer.";

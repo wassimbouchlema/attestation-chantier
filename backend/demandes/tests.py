@@ -114,17 +114,18 @@ class DemandeEndpointTests(APITestCase):
         response = self.client.get(reverse("demande-list"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        resultats = response.data["results"]
         self.assertCountEqual(
-            [demande["id"] for demande in response.data],
+            [demande["id"] for demande in resultats],
             [str(self.demande_a.pk), str(autre_demande_a.pk)],
         )
         self.assertTrue(
             all(
                 demande["distributeur"] == self.distributeur_a.pk
-                for demande in response.data
+                for demande in resultats
             )
         )
-        self.assertTrue(all("fdr" not in demande for demande in response.data))
+        self.assertTrue(all("fdr" not in demande for demande in resultats))
 
     def test_liste_vide_si_aucune_demande_personnelle(self):
         self.demande_a.delete()
@@ -133,7 +134,116 @@ class DemandeEndpointTests(APITestCase):
         response = self.client.get(reverse("demande-list"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [])
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_liste_paginee_avec_count_next_previous_results(self):
+        Demande.objects.filter(distributeur=self.distributeur_a).delete()
+        for _ in range(15):
+            Demande.objects.create(distributeur=self.distributeur_a)
+        self._authentifier(self.distributeur_a)
+
+        premiere_page = self.client.get(reverse("demande-list"))
+        deuxieme_page = self.client.get(reverse("demande-list"), {"page": 2})
+
+        self.assertEqual(premiere_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(premiere_page.data["count"], 15)
+        self.assertEqual(len(premiere_page.data["results"]), 10)
+        self.assertIsNotNone(premiere_page.data["next"])
+        self.assertIsNone(premiere_page.data["previous"])
+
+        self.assertEqual(deuxieme_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(deuxieme_page.data["results"]), 5)
+        self.assertIsNone(deuxieme_page.data["next"])
+        self.assertIsNotNone(deuxieme_page.data["previous"])
+
+    def test_page_hors_bornes_retourne_404(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.get(reverse("demande-list"), {"page": 999})
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_filtre_statut_ne_retourne_que_les_demandes_correspondantes(self):
+        Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.TRAITE)
+        self._authentifier(self.distributeur_a)
+
+        for statut in StatutDemande.values:
+            with self.subTest(statut=statut):
+                response = self.client.get(reverse("demande-list"), {"statut": statut})
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertTrue(
+                    all(demande["statut"] == statut for demande in response.data["results"])
+                )
+
+    def test_filtre_statut_invalide_retourne_400(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.get(reverse("demande-list"), {"statut": "INCONNU"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filtre_statut_vide_equivaut_a_aucun_filtre(self):
+        self._authentifier(self.distributeur_a)
+
+        avec_statut_vide = self.client.get(reverse("demande-list"), {"statut": ""})
+        sans_filtre = self.client.get(reverse("demande-list"))
+
+        self.assertEqual(avec_statut_vide.status_code, status.HTTP_200_OK)
+        self.assertEqual(avec_statut_vide.data["count"], sans_filtre.data["count"])
+
+    def test_filtre_statut_respecte_ownership(self):
+        Demande.objects.create(distributeur=self.distributeur_b, statut=StatutDemande.BROUILLON)
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.get(reverse("demande-list"), {"statut": StatutDemande.BROUILLON})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            all(demande["distributeur"] == self.distributeur_a.pk for demande in response.data["results"])
+        )
+
+    def test_filtre_statut_combine_a_la_pagination(self):
+        Demande.objects.filter(distributeur=self.distributeur_a).delete()
+        for _ in range(15):
+            Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.BROUILLON)
+        Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        self._authentifier(self.distributeur_a)
+
+        premiere_page = self.client.get(
+            reverse("demande-list"), {"statut": StatutDemande.BROUILLON, "page": 1}
+        )
+        deuxieme_page = self.client.get(
+            reverse("demande-list"), {"statut": StatutDemande.BROUILLON, "page": 2}
+        )
+
+        self.assertEqual(premiere_page.data["count"], 15)
+        self.assertEqual(len(premiere_page.data["results"]), 10)
+        self.assertEqual(len(deuxieme_page.data["results"]), 5)
+        self.assertTrue(
+            all(
+                demande["statut"] == StatutDemande.BROUILLON
+                for demande in premiere_page.data["results"] + deuxieme_page.data["results"]
+            )
+        )
+
+    def test_ordre_stable_a_travers_les_pages(self):
+        Demande.objects.filter(distributeur=self.distributeur_a).delete()
+        demandes = [Demande.objects.create(distributeur=self.distributeur_a) for _ in range(15)]
+        ordre_attendu = [
+            str(demande.pk)
+            for demande in sorted(demandes, key=lambda d: (d.created_at, d.pk), reverse=True)
+        ]
+        self._authentifier(self.distributeur_a)
+
+        premiere_page = self.client.get(reverse("demande-list"), {"page": 1})
+        deuxieme_page = self.client.get(reverse("demande-list"), {"page": 2})
+
+        ids_retournes = [demande["id"] for demande in premiere_page.data["results"]] + [
+            demande["id"] for demande in deuxieme_page.data["results"]
+        ]
+        self.assertEqual(ids_retournes, ordre_attendu)
 
     def test_distributeur_consulte_sa_demande(self):
         self._authentifier(self.distributeur_a)

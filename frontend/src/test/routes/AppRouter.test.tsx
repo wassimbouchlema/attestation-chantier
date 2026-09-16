@@ -1,9 +1,11 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { AuthProvider } from "../../features/auth/AuthProvider";
+import { createQueryClient } from "../../queryClient";
 import { AppRouter } from "../../routes/AppRouter";
 import { seedSession } from "../utils";
 
@@ -14,7 +16,9 @@ const irVers = (chemin: string) => {
 const renderAppRouter = () => {
   return render(
     <AuthProvider>
-      <AppRouter />
+      <QueryClientProvider client={createQueryClient()}>
+        <AppRouter />
+      </QueryClientProvider>
     </AuthProvider>,
   );
 };

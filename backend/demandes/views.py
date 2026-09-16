@@ -1,12 +1,18 @@
 from django.db import transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from comptes.permissions import IsDistributeur
 
 from .models import Demande, FormulaireRisque, StatutDemande
 from .serializers import DemandeDetailSerializer, DemandeSerializer, FormulaireRisqueSerializer
+
+
+class DemandePagination(PageNumberPagination):
+    page_size = 10
 
 
 class DemandeViewSet(
@@ -18,9 +24,26 @@ class DemandeViewSet(
     permission_classes = [IsDistributeur]
     serializer_class = DemandeSerializer
     lookup_value_converter = "uuid"
+    pagination_class = DemandePagination
 
     def get_queryset(self):
-        return Demande.objects.filter(distributeur=self.request.user)
+        queryset = Demande.objects.filter(distributeur=self.request.user)
+
+        if self.action == "list":
+            statut = self.request.query_params.get("statut")
+            if statut:
+                if statut not in StatutDemande.values:
+                    raise ValidationError(
+                        {
+                            "statut": (
+                                "Valeur invalide. Valeurs autorisées : "
+                                f"{', '.join(StatutDemande.values)}."
+                            )
+                        }
+                    )
+                queryset = queryset.filter(statut=statut)
+
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "retrieve":

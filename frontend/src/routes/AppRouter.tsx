@@ -1,12 +1,13 @@
 import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
 
 import { useAuth } from "../features/auth/useAuth";
-import { LoginPage } from "../features/auth/LoginPage";
 import { resolveHomePath } from "../features/auth/roleHome";
 import { AppShell } from "../layout/AppShell";
 import { SessionLoader } from "../layout/SessionLoader";
-import { DistributeurHome } from "../pages/DistributeurHome";
-import { SiegeHome } from "../pages/SiegeHome";
+import { LoginPage } from "../pages/Login/LoginPage";
+import { DemandeDetailPage } from "../pages/DemandeDetail/DemandeDetailPage";
+import { DistributeurHome } from "../pages/DistributeurHome/DistributeurHome";
+import { SiegeHome } from "../pages/SiegeHome/SiegeHome";
 import { ProtectedRoute } from "./ProtectedRoute";
 
 /**
@@ -39,6 +40,14 @@ export const AppRouter = () => {
           element={
             <ProtectedRoute roleRequis="DISTRIBUTEUR">
               <DistributeurHome />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/distributeur/demandes/:id"
+          element={
+            <ProtectedRoute roleRequis="DISTRIBUTEUR">
+              <DemandeDetailPage />
             </ProtectedRoute>
           }
         />

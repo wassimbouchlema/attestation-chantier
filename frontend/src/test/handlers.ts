@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 
 import type { Utilisateur } from "../api/auth";
+import type { Demande, DemandesPaginees } from "../api/demandes";
 
 export const UTILISATEUR_DISTRIBUTEUR: Utilisateur = {
   id: 1,
@@ -59,5 +60,34 @@ export const handlers = [
       return new HttpResponse(null, { status: 401 });
     }
     return HttpResponse.json({ access });
+  }),
+
+  // Handlers par défaut "neutres" pour /demandes/ : les tests qui inspectent
+  // réellement le contenu de la liste/détail les remplacent via server.use().
+  http.get("*/demandes/", () => {
+    const reponse: DemandesPaginees = { count: 0, next: null, previous: null, results: [] };
+    return HttpResponse.json(reponse);
+  }),
+
+  http.get("*/demandes/:id/", ({ params }) => {
+    const demande: Demande = {
+      id: params.id as string,
+      distributeur: 1,
+      statut: "BROUILLON",
+      created_at: "2026-09-16T09:00:00Z",
+      updated_at: "2026-09-16T09:00:00Z",
+    };
+    return HttpResponse.json(demande);
+  }),
+
+  http.post("*/demandes/", () => {
+    const demande: Demande = {
+      id: "11111111-1111-4111-8111-111111111111",
+      distributeur: 1,
+      statut: "BROUILLON",
+      created_at: "2026-09-16T09:00:00Z",
+      updated_at: "2026-09-16T09:00:00Z",
+    };
+    return HttpResponse.json(demande, { status: 201 });
   }),
 ];

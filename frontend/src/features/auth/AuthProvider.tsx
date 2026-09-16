@@ -8,6 +8,7 @@ import {
   type Utilisateur,
 } from "../../api/auth";
 import { ACCESS_TOKEN_KEY, AuthContext, REFRESH_TOKEN_KEY } from "./authContext";
+import { registerLogoutHandler } from "./tokenStore";
 
 const MESSAGE_SESSION_INDISPONIBLE = "Impossible de vérifier votre session. Vérifiez votre connexion puis réessayez.";
 
@@ -119,6 +120,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setErreurSession(null);
     setIsLoading(false);
   }, []);
+
+  /**
+   * Permet à tokenStore (hors React, utilisé par le transport HTTP des
+   * queries/mutations) de déclencher une vraie déconnexion applicative quand
+   * un refresh échoue définitivement en cours de session. registerLogoutHandler
+   * remplace le handler précédent (jamais d'accumulation) et retourne le
+   * nettoyage à appeler au démontage pour ne pas laisser un handler obsolète.
+   */
+  useEffect(() => {
+    return registerLogoutHandler(logout);
+  }, [logout]);
 
   return (
     <AuthContext.Provider
