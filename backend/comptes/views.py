@@ -8,6 +8,7 @@ from .serializers import UtilisateurSerializer
 
 class Me(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = UtilisateurSerializer 
 
     def get(self, request):
         return Response(UtilisateurSerializer(request.user).data)
