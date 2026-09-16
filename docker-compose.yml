@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: attestation_db
+      POSTGRES_USER: attestation_user
+      POSTGRES_PASSWORD: attestation_pwd
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:
