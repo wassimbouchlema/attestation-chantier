@@ -1,6 +1,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 
 
@@ -31,5 +32,104 @@ class Demande(models.Model):
             models.CheckConstraint(
                 condition=models.Q(statut__in=StatutDemande.values),
                 name="demande_statut_valide",
+            ),
+        ]
+
+
+class TypeChantier(models.TextChoices):
+    NEUVE = "NEUVE", "Construction neuve"
+    RENOVATION = "RENOVATION", "Rénovation"
+
+
+class Usage(models.TextChoices):
+    HABITATION = "HABITATION", "Habitation"
+    BUREAU = "BUREAU", "Bureau"
+    COMMERCE = "COMMERCE", "Commerce"
+    AUTRE = "AUTRE", "Autre"
+
+
+class TypeIntervention(models.TextChoices):
+    PRINCIPALE = "PRINCIPALE", "Entreprise principale"
+    SOUS_TRAITANT = "SOUS_TRAITANT", "Sous-traitant"
+
+
+numero_contrat_validator = RegexValidator(
+    regex=r"^\d{1,13}$",
+    message="Le numéro de contrat doit être uniquement numérique (13 chiffres maximum).",
+)
+
+
+class FormulaireRisque(models.Model):
+    demande = models.OneToOneField(
+        Demande,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="fdr",
+    )
+
+    # Assuré
+    assure_nom = models.CharField(max_length=255, blank=True)
+    assure_ville = models.CharField(max_length=255, blank=True)
+    assure_numero_contrat = models.CharField(
+        max_length=13, blank=True, validators=[numero_contrat_validator]
+    )
+
+    # Chantier
+    chantier_nom = models.CharField(max_length=255, blank=True)
+    chantier_ville = models.CharField(max_length=255, blank=True)
+    type_chantier = models.CharField(
+        max_length=20, choices=TypeChantier.choices, blank=True, default=""
+    )
+    modification_structure = models.BooleanField(null=True, blank=True)
+    chantier_atypique = models.BooleanField(null=True, blank=True)
+
+    # Usage
+    usage = models.CharField(max_length=20, choices=Usage.choices, blank=True, default="")
+    usage_autre_texte = models.TextField(blank=True)
+
+    # Dates / coût
+    date_debut = models.DateField(null=True, blank=True)
+    date_fin = models.DateField(null=True, blank=True)
+    montant_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+
+    # Intervention
+    intervention_description = models.TextField(blank=True)
+    intervention_montant_prestation = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    intervention_type = models.CharField(
+        max_length=20, choices=TypeIntervention.choices, blank=True, default=""
+    )
+
+    # Contrat / activité
+    activite_couverte = models.BooleanField(null=True, blank=True)
+    activite_non_couverte_texte = models.TextField(blank=True)
+
+    # Travaux
+    travaux_standards = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(type_chantier__in=[*TypeChantier.values, ""]),
+                name="fdr_type_chantier_valide",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(usage__in=[*Usage.values, ""]),
+                name="fdr_usage_valide",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(intervention_type__in=[*TypeIntervention.values, ""]),
+                name="fdr_intervention_type_valide",
             ),
         ]
