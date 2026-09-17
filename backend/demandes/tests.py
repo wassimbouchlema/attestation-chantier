@@ -1,15 +1,25 @@
 import uuid
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
 
-from .models import Demande, FormulaireRisque, StatutDemande
+from .models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
+from .rules import (
+    PIECE_ACTIVITE,
+    PIECE_COMPLEXITE,
+    PIECE_MONTANT,
+    PIECE_STRUCTURE,
+    PIECE_TRAVAUX,
+    PIECE_USAGE,
+    calculer_pieces_requises,
+)
 
 
 class DemandeModeleTests(TestCase):
@@ -700,3 +710,108 @@ class FormulaireRisqueEndpointTests(APITestCase):
         response = self.client.get(self._url_fdr(self.demande_a))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class CalculerPiecesRequisesTests(SimpleTestCase):
+    """Tests directs du moteur métier : instances FormulaireRisque en mémoire,
+    jamais sauvegardées, aucun accès DB (SimpleTestCase)."""
+
+    def test_fdr_vide_ne_declenche_aucune_piece(self):
+        fdr = FormulaireRisque()
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_renovation_avec_modification_structure_declenche_structure(self):
+        fdr = FormulaireRisque(
+            type_chantier=TypeChantier.RENOVATION, modification_structure=True
+        )
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_STRUCTURE])
+
+    def test_renovation_sans_modification_structure_ne_declenche_pas_structure(self):
+        fdr = FormulaireRisque(
+            type_chantier=TypeChantier.RENOVATION, modification_structure=False
+        )
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_hors_renovation_modification_structure_true_ne_declenche_pas_structure(self):
+        fdr = FormulaireRisque(
+            type_chantier=TypeChantier.NEUVE, modification_structure=True
+        )
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_usage_autre_declenche_usage(self):
+        fdr = FormulaireRisque(usage=Usage.AUTRE)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_USAGE])
+
+    def test_chantier_atypique_declenche_complexite(self):
+        fdr = FormulaireRisque(chantier_atypique=True)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_COMPLEXITE])
+
+    def test_montant_egal_au_seuil_ne_declenche_pas_montant(self):
+        fdr = FormulaireRisque(montant_total=Decimal("10000000"))
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_montant_juste_au_dessus_du_seuil_declenche_montant(self):
+        fdr = FormulaireRisque(montant_total=Decimal("10000000.01"))
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_MONTANT])
+
+    def test_activite_non_couverte_declenche_activite(self):
+        fdr = FormulaireRisque(activite_couverte=False)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_ACTIVITE])
+
+    def test_activite_couverte_ne_declenche_pas_activite(self):
+        fdr = FormulaireRisque(activite_couverte=True)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_travaux_non_standards_declenche_travaux(self):
+        fdr = FormulaireRisque(travaux_standards=False)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [PIECE_TRAVAUX])
+
+    def test_travaux_standards_ne_declenche_pas_travaux(self):
+        fdr = FormulaireRisque(travaux_standards=True)
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_booleens_null_ne_declenchent_aucune_piece_et_ne_plantent_pas(self):
+        fdr = FormulaireRisque(
+            modification_structure=None,
+            chantier_atypique=None,
+            activite_couverte=None,
+            travaux_standards=None,
+            montant_total=None,
+        )
+
+        self.assertEqual(calculer_pieces_requises(fdr), [])
+
+    def test_plusieurs_regles_simultanees_toutes_pieces_dans_ordre_metier(self):
+        fdr = FormulaireRisque(
+            type_chantier=TypeChantier.RENOVATION,
+            modification_structure=True,
+            usage=Usage.AUTRE,
+            chantier_atypique=True,
+            montant_total=Decimal("10000000.01"),
+            activite_couverte=False,
+            travaux_standards=False,
+        )
+
+        self.assertEqual(
+            calculer_pieces_requises(fdr),
+            [
+                PIECE_STRUCTURE,
+                PIECE_USAGE,
+                PIECE_COMPLEXITE,
+                PIECE_MONTANT,
+                PIECE_ACTIVITE,
+                PIECE_TRAVAUX,
+            ],
+        )
