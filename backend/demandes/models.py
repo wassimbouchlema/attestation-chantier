@@ -1,4 +1,5 @@
 import uuid
+from pathlib import Path
 
 from django.conf import settings
 from django.core.validators import MinValueValidator, RegexValidator
@@ -133,3 +134,23 @@ class FormulaireRisque(models.Model):
                 name="fdr_intervention_type_valide",
             ),
         ]
+
+
+def chemin_upload_piece(instance, filename):
+    # Chemin de stockage opaque, indépendant du nom fourni par le client :
+    # `filename` peut contenir des caractères/segments non fiables, seule son
+    # extension (lue sur le dernier segment, jamais un chemin complet) est reprise.
+    extension = Path(filename).suffix
+    return f"pieces/{instance.demande_id}/{uuid.uuid4()}{extension}"
+
+
+class PieceJustificative(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    demande = models.ForeignKey(Demande, on_delete=models.CASCADE, related_name="pieces")
+    type_piece = models.CharField(max_length=20)
+    fichier = models.FileField(upload_to=chemin_upload_piece)
+    nom_fichier_original = models.CharField(max_length=255)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["uploaded_at", "id"]

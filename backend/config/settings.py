@@ -134,6 +134,14 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
+# Fichiers médias (pièces justificatives uploadées)
+# Pas de MEDIA_URL / service statique branché volontairement : aucun accès
+# fichier public n'est exposé tant qu'un endpoint de téléchargement avec
+# contrôle d'accès n'existe pas (voir docs/regles-metier.md, DoD sécurité).
+
+MEDIA_ROOT = BASE_DIR / 'media'
+
+
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
