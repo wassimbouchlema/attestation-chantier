@@ -8,11 +8,13 @@ from rest_framework.response import Response
 
 from comptes.permissions import IsDistributeur
 
+from .evaluation_risque import calculer_evaluation_risque
 from .models import Demande, FormulaireRisque, PieceJustificative, StatutDemande
 from .rules import calculer_pieces_manquantes, calculer_pieces_requises
 from .serializers import (
     DemandeDetailSerializer,
     DemandeSerializer,
+    EvaluationRisqueSerializer,
     FormulaireRisqueSerializer,
     PieceJustificativeSerializer,
 )
@@ -57,6 +59,8 @@ class DemandeViewSet(
             return DemandeDetailSerializer
         if self.action == "fdr":
             return FormulaireRisqueSerializer
+        if self.action == "evaluation_risque":
+            return EvaluationRisqueSerializer
         return DemandeSerializer
 
     def perform_create(self, serializer):
@@ -84,6 +88,12 @@ class DemandeViewSet(
         serializer = self.get_serializer(demande.fdr, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="evaluation-risque")
+    def evaluation_risque(self, request, pk=None):
+        demande = self.get_object()
+        serializer = self.get_serializer(calculer_evaluation_risque(demande.fdr))
         return Response(serializer.data)
 
 

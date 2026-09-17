@@ -2,6 +2,7 @@ from pathlib import Path
 
 from rest_framework import serializers
 
+from .evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
 from .models import Demande, FormulaireRisque, PieceJustificative, TypeChantier, Usage
 from .rules import TYPES_PIECES_AUTORISES
 
@@ -133,3 +134,14 @@ class PieceJustificativeSerializer(serializers.ModelSerializer):
         # généré par `chemin_upload_piece`.
         validated_data["nom_fichier_original"] = Path(validated_data["fichier"].name).name
         return super().create(validated_data)
+
+
+class EvaluationRisqueSerializer(serializers.Serializer):
+    """Sérialisation en lecture seule de `calculer_evaluation_risque` — introspection
+    OpenAPI uniquement, ne correspond à aucun modèle (rien n'est stocké en base)."""
+
+    score = serializers.IntegerField(read_only=True)
+    niveau = serializers.ChoiceField(
+        choices=[NIVEAU_FAIBLE, NIVEAU_MODERE, NIVEAU_ELEVE], read_only=True
+    )
+    synthese = serializers.CharField(read_only=True)
