@@ -1,13 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Button, ChoiceInput, Restitution, TextareaInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
 import { Controller, useFormContext } from "react-hook-form";
 
+import { CHAMPS_QUESTIONS_METIER } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
 import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const CHAMPS_QUESTIONS_METIER = ["activite_couverte", "activite_non_couverte_texte", "travaux_standards"] as const;
 
 const libelleOuiNon = (valeur: boolean | null): string => (valeur === true ? "Oui" : valeur === false ? "Non" : "—");
 
@@ -34,8 +33,13 @@ export const QuestionsMetierSection = ({
 
   const activiteCouverte = watch("activite_couverte");
 
-  // activite_couverte != false : l'explication devient sans objet, nettoyée immédiatement.
+  const activiteCouvertePrecedenteRef = useRef(activiteCouverte);
   useEffect(() => {
+    const precedente = activiteCouvertePrecedenteRef.current;
+    activiteCouvertePrecedenteRef.current = activiteCouverte;
+    if (precedente === activiteCouverte) {
+      return;
+    }
     if (activiteCouverte !== false) {
       setValue("activite_non_couverte_texte", "");
     }

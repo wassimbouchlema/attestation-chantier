@@ -2,12 +2,11 @@ import { Button, NumberInput, Restitution, SelectInput, TextareaInput, VerticalS
 import { Controller, useFormContext } from "react-hook-form";
 
 import { OPTIONS_INTERVENTION_TYPE } from "../../constants/optionsInterventionType";
+import { CHAMPS_INTERVENTION } from "../../constants/sections";
 import { formatMontant } from "../../helpers/formatMontant";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
 import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const CHAMPS_INTERVENTION = ["intervention_description", "intervention_montant_prestation", "intervention_type"] as const;
 
 export const InterventionSection = ({
   etat,

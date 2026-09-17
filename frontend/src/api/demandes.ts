@@ -119,3 +119,20 @@ export const creerDemande = async (signal?: AbortSignal): Promise<Demande> => {
   }
   return lireJson<Demande>(response, messageIndisponible);
 };
+
+/** Sauvegarde technique du FDR (`PATCH /demandes/{id}/fdr/`) : ne change pas le statut, ne déclenche aucun calcul métier. */
+export const mettreAJourFdr = async (
+  demandeId: string,
+  payload: FormulaireRisqueApi,
+): Promise<FormulaireRisqueApi> => {
+  const messageIndisponible = "Impossible d'enregistrer le formulaire de déclaration du risque.";
+  const response = await requeteAuthentifiee(`/demandes/${demandeId}/fdr/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return lireJson<FormulaireRisqueApi>(response, messageIndisponible);
+};

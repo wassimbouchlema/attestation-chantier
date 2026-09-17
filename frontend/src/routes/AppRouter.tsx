@@ -8,6 +8,7 @@ import { SessionLoader } from "../layout/SessionLoader";
 import { LoginPage } from "../pages/Login/LoginPage";
 import { DistributeurHome } from "../pages/DistributeurHome/DistributeurHome";
 import { FdrInformationsPage } from "../pages/FdrInformations/FdrInformationsPage";
+import { FdrPiecesPage } from "../pages/FdrPieces/FdrPiecesPage";
 import { SiegeHome } from "../pages/SiegeHome/SiegeHome";
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -54,6 +55,7 @@ export const AppRouter = () => {
         >
           <Route index element={<Navigate to="informations" replace />} />
           <Route path="informations" element={<FdrInformationsPage />} />
+          <Route path="pieces" element={<FdrPiecesPage />} />
         </Route>
         <Route
           path="/siege"

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import {
   Button,
@@ -12,13 +12,12 @@ import {
 import { Controller, useFormContext } from "react-hook-form";
 
 import { OPTIONS_USAGE } from "../../constants/optionsUsage";
+import { CHAMPS_USAGE_CALENDRIER } from "../../constants/sections";
 import { formatDateFr } from "../../helpers/formatDateFr";
 import { formatMontant } from "../../helpers/formatMontant";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
 import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const CHAMPS_USAGE_CALENDRIER = ["usage", "usage_autre_texte", "date_debut", "date_fin", "montant_total"] as const;
 
 export const UsageCalendrierSection = ({
   etat,
@@ -43,8 +42,13 @@ export const UsageCalendrierSection = ({
 
   const usage = watch("usage");
 
-  // usage != AUTRE : la précision devient sans objet, nettoyée immédiatement.
+  const usagePrecedentRef = useRef(usage);
   useEffect(() => {
+    const precedent = usagePrecedentRef.current;
+    usagePrecedentRef.current = usage;
+    if (precedent === usage) {
+      return;
+    }
     if (usage !== "AUTRE") {
       setValue("usage_autre_texte", "");
     }

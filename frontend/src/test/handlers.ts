@@ -2,6 +2,8 @@ import { http, HttpResponse } from "msw";
 
 import type { Utilisateur } from "../api/auth";
 import type { Demande, DemandesPaginees, FormulaireRisqueApi } from "../api/demandes";
+import type { EvaluationRisqueApi } from "../api/evaluationRisque";
+import type { PiecesResponseApi } from "../api/pieces";
 
 export const UTILISATEUR_DISTRIBUTEUR: Utilisateur = {
   id: 1,
@@ -111,5 +113,24 @@ export const handlers = [
       updated_at: "2026-09-16T09:00:00Z",
     };
     return HttpResponse.json(demande, { status: 201 });
+  }),
+
+  http.get("*/demandes/:id/pieces/", () => {
+    const reponse: PiecesResponseApi = {
+      pieces: [],
+      pieces_requises: [],
+      pieces_manquantes: [],
+      dossier_complet: true,
+    };
+    return HttpResponse.json(reponse);
+  }),
+
+  http.get("*/demandes/:id/evaluation-risque/", () => {
+    const reponse: EvaluationRisqueApi = {
+      score: 0,
+      niveau: "faible",
+      synthese: "Aucun facteur de risque significatif n'a été identifié par l'évaluation automatique indicative.",
+    };
+    return HttpResponse.json(reponse);
   }),
 ];

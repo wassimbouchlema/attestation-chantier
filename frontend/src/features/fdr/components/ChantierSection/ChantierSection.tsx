@@ -1,14 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Button, ChoiceInput, Restitution, SelectInput, TextInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
 import { Controller, useFormContext } from "react-hook-form";
 
 import { OPTIONS_TYPE_CHANTIER } from "../../constants/optionsTypeChantier";
+import { CHAMPS_CHANTIER } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
 import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const CHAMPS_CHANTIER = ["chantier_nom", "chantier_ville", "type_chantier", "modification_structure", "chantier_atypique"] as const;
 
 const libelleOuiNon = (valeur: boolean | null): string => (valeur === true ? "Oui" : valeur === false ? "Non" : "—");
 
@@ -35,8 +34,13 @@ export const ChantierSection = ({
 
   const typeChantier = watch("type_chantier");
 
-  // type_chantier != RENOVATION : modification_structure devient sans objet, nettoyé immédiatement (symétrique à la normalisation backend).
+  const typeChantierPrecedentRef = useRef(typeChantier);
   useEffect(() => {
+    const precedent = typeChantierPrecedentRef.current;
+    typeChantierPrecedentRef.current = typeChantier;
+    if (precedent === typeChantier) {
+      return;
+    }
     if (typeChantier !== "RENOVATION") {
       setValue("modification_structure", null);
     }

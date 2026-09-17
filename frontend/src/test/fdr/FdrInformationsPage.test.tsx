@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { HttpResponse, http } from "msw";
-import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Demande, DemandeDetail, FormulaireRisqueApi } from "../../api/demandes";
@@ -27,6 +27,15 @@ const renderWizard = (chemin = `/distributeur/demandes/${ID_DEMANDE}/information
             <Route path="/distributeur/demandes/:id" element={<FdrWizardLayout />}>
               <Route index element={<Navigate to="informations" replace />} />
               <Route path="informations" element={<FdrInformationsPage />} />
+              <Route
+                path="pieces"
+                element={
+                  <>
+                    <p>Pièces & risque (page)</p>
+                    <Link to={`/distributeur/demandes/${ID_DEMANDE}/informations`}>Retour aux informations (test)</Link>
+                  </>
+                }
+              />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -81,6 +90,14 @@ const FDR_COMPLET: FormulaireRisqueApi = {
   travaux_standards: true,
 };
 
+// FDR_COMPLET privé uniquement des 2 champs obligatoires de Questions métier :
+// seule cette dernière section doit apparaître incomplète à l'hydratation.
+const FDR_QUESTIONS_METIER_INCOMPLETES: FormulaireRisqueApi = {
+  ...FDR_COMPLET,
+  activite_couverte: null,
+  travaux_standards: null,
+};
+
 const demandeApi = (overrides: Partial<Demande> = {}, fdr: FormulaireRisqueApi = FDR_VIDE): DemandeDetail => ({
   id: ID_DEMANDE,
   distributeur: 1,
@@ -100,14 +117,17 @@ beforeEach(() => {
 });
 
 describe("FdrInformationsPage — chargement", () => {
-  it("affiche un état de chargement puis hydrate les champs depuis le FDR existant", async () => {
-    mockDemande(demandeApi({}, FDR_COMPLET));
+  it("affiche un état de chargement puis hydrate les champs déjà saisis depuis le FDR existant", async () => {
+    // Assuré volontairement incomplet (ville/numéro de contrat manquants) : la section
+    // reste "active" à l'hydratation (cf. describe "reprise d'un brouillon" plus bas
+    // pour le cas d'un FDR complet, où elle apparaîtrait en restitution "validée").
+    mockDemande(demandeApi({}, { ...FDR_VIDE, assure_nom: "AXA Construction" }));
     renderWizard();
 
     expect(screen.getByText(/Chargement en cours/)).toBeInTheDocument();
     expect(await screen.findByLabelText("Nom / raison sociale")).toHaveValue("AXA Construction");
-    expect(screen.getByLabelText("Ville")).toHaveValue("Paris");
-    expect(screen.getByLabelText("Numéro de contrat")).toHaveValue("123456789");
+    expect(screen.getByLabelText("Ville")).toHaveValue("");
+    expect(screen.getByLabelText("Numéro de contrat")).toHaveValue("");
   });
 
   it("affiche un message explicite quand la demande est introuvable (404)", async () => {
@@ -387,23 +407,102 @@ describe("FdrInformationsPage — sections Usage/Intervention/Questions métier"
     ).toBeInTheDocument();
   });
 
-  it("affiche l'explication uniquement quand l'activité n'est pas couverte, et l'exige pour valider", async () => {
-    const user = userEvent.setup();
-    mockDemande(demandeApi());
+  it(
+    "affiche l'explication uniquement quand l'activité n'est pas couverte, et l'exige pour valider",
+    async () => {
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+      await avancerJusquaQuestionsMetier(user);
+
+      expect(screen.queryByLabelText("Explication")).not.toBeInTheDocument();
+
+      const radioActivite = screen.getByRole("radiogroup", { name: "L'activité est-elle couverte par le contrat ?" });
+      await user.click(within(radioActivite).getByLabelText("Non"));
+      expect(screen.getByLabelText("Explication")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Valider" }));
+      expect(
+        await screen.findByText("Une explication est nécessaire lorsque l'activité n'est pas couverte par le contrat."),
+      ).toBeInTheDocument();
+    },
+    15000,
+  );
+});
+
+const remplirLes5Sections = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
+  await user.type(screen.getByLabelText("Ville"), "Paris");
+  await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+  await user.click(screen.getByRole("button", { name: "Valider" }));
+  await screen.findByLabelText("Nom du chantier");
+
+  await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
+  await user.type(screen.getByLabelText("Ville"), "Lyon");
+  await user.selectOptions(screen.getByLabelText("Type de chantier"), "Construction neuve");
+  await user.click(within(screen.getByRole("radiogroup", { name: "Chantier atypique ?" })).getByLabelText("Non"));
+  await user.click(screen.getByRole("button", { name: "Valider" }));
+  await screen.findByLabelText("Usage");
+
+  await user.selectOptions(screen.getByLabelText("Usage"), "Bureau");
+  fireEvent.change(screen.getByLabelText("Date de début"), { target: { value: "2026-01-10" } });
+  fireEvent.change(screen.getByLabelText("Date de fin"), { target: { value: "2026-06-30" } });
+  await user.type(screen.getByLabelText("Montant total (€)"), "500000");
+  await user.click(screen.getByRole("button", { name: "Valider" }));
+  await screen.findByLabelText("Description des travaux");
+
+  await user.type(screen.getByLabelText("Description des travaux"), "Rénovation complète");
+  await user.type(screen.getByLabelText("Montant de la prestation (€)"), "120000");
+  await user.selectOptions(screen.getByLabelText("Type d'intervention"), "Entreprise principale");
+  await user.click(screen.getByRole("button", { name: "Valider" }));
+  await screen.findByText("L'activité est-elle couverte par le contrat ?");
+
+  await user.click(within(screen.getByRole("radiogroup", { name: "L'activité est-elle couverte par le contrat ?" })).getByLabelText("Oui"));
+  await user.click(within(screen.getByRole("radiogroup", { name: "Les travaux sont-ils standards ?" })).getByLabelText("Oui"));
+  await user.click(screen.getByRole("button", { name: "Valider" }));
+  await screen.findAllByText("Oui");
+};
+
+describe("FdrInformationsPage — reprise d'un brouillon (pas un nouveau parcours de création)", () => {
+  it("brouillon complet ouvert directement : les 5 sections sont déjà validées, sans repartir d'Assuré", async () => {
+    mockDemande(demandeApi({}, FDR_COMPLET));
     renderWizard();
-    await screen.findByLabelText("Nom / raison sociale");
-    await avancerJusquaQuestionsMetier(user);
 
-    expect(screen.queryByLabelText("Explication")).not.toBeInTheDocument();
+    expect(await screen.findByText("AXA Construction")).toBeInTheDocument();
+    for (const titre of TITRES_SECTIONS) {
+      expect(screen.getByRole("button", { name: `Modifier l'étape ${titre}` })).toBeInTheDocument();
+    }
+    expect(screen.queryByLabelText("Nom / raison sociale")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+    const sectionChantier = screen.getByRole("region", { name: "Étape verticale Chantier (validée)" });
+    const ligneModificationStructure = within(sectionChantier).getByText("Modification de structure").closest("dt");
+    expect(ligneModificationStructure?.nextElementSibling).toHaveTextContent("Oui");
+  });
 
-    const radioActivite = screen.getByRole("radiogroup", { name: "L'activité est-elle couverte par le contrat ?" });
-    await user.click(within(radioActivite).getByLabelText("Non"));
-    expect(screen.getByLabelText("Explication")).toBeInTheDocument();
+  it("brouillon où seule Questions métier est incomplète : les 4 premières sont validées, Questions métier est ouverte", async () => {
+    mockDemande(demandeApi({}, FDR_QUESTIONS_METIER_INCOMPLETES));
+    renderWizard();
 
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-    expect(
-      await screen.findByText("Une explication est nécessaire lorsque l'activité n'est pas couverte par le contrat."),
-    ).toBeInTheDocument();
+    await screen.findByText("L'activité est-elle couverte par le contrat ?");
+    for (const titre of ["Assuré", "Chantier", "Usage & calendrier", "Intervention"]) {
+      expect(screen.getByRole("button", { name: `Modifier l'étape ${titre}` })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: "Modifier l'étape Questions métier" })).not.toBeInTheDocument();
+  });
+
+  it("retour depuis Pièces & risque avec un FDR complet : les 5 sections restent validées", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi({}, FDR_COMPLET));
+    renderWizard(`/distributeur/demandes/${ID_DEMANDE}/pieces`);
+    await screen.findByText("Pièces & risque (page)");
+
+    await user.click(screen.getByRole("link", { name: "Retour aux informations (test)" }));
+
+    expect(await screen.findByText("AXA Construction")).toBeInTheDocument();
+    for (const titre of TITRES_SECTIONS) {
+      expect(screen.getByRole("button", { name: `Modifier l'étape ${titre}` })).toBeInTheDocument();
+    }
   });
 });
 
@@ -419,52 +518,171 @@ describe("FdrInformationsPage — actions globales", () => {
     expect(await screen.findByText("Mes demandes (liste)")).toBeInTheDocument();
   });
 
-  it("Confirmer les informations est présent mais désactivé tant que le parcours n'est pas terminé", async () => {
+  it("Confirmer les informations est toujours cliquable, même parcours non terminé (seul un PATCH en cours peut le désactiver)", async () => {
     mockDemande(demandeApi());
     renderWizard();
     await screen.findByLabelText("Nom / raison sociale");
 
-    expect(screen.getByRole("button", { name: "Confirmer les informations" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Confirmer les informations" })).not.toBeDisabled();
   });
+});
 
-  it("Confirmer les informations devient activé une fois les 5 sections validées", async () => {
+// Timeout étendu (15s) sur les tests de cette section : chacun rejoue les 5
+// sections de `remplirLes5Sections` avant d'agir, ce qui dépasse le budget
+// par défaut de Vitest sur une machine chargée.
+describe("FdrInformationsPage — Confirmer les informations", () => {
+  it(
+    "formulaire valide : envoie le PATCH attendu puis navigue vers l'étape Pièces",
+    async () => {
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      let corpsRecu: Record<string, unknown> | null = null;
+      server.use(
+        http.patch("*/demandes/:id/fdr/", async ({ request }) => {
+          corpsRecu = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json(corpsRecu);
+        }),
+      );
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+      await remplirLes5Sections(user);
+
+      await user.click(screen.getByRole("button", { name: "Confirmer les informations" }));
+
+      expect(await screen.findByText("Pièces & risque (page)")).toBeInTheDocument();
+      if (!corpsRecu) {
+        throw new Error("Le corps du PATCH n'a pas été capturé par le handler MSW.");
+      }
+      const corps: Record<string, unknown> = corpsRecu;
+      expect(corps.assure_nom).toBe("AXA Construction");
+      expect(corps.type_chantier).toBe("NEUVE");
+      expect(corps.modification_structure).toBeNull();
+      expect(corps.montant_total).toBe("500000");
+      expect(corps.date_debut).toBe("2026-01-10");
+    },
+    15000,
+  );
+
+  it(
+    "erreur serveur au PATCH : reste sur Informations et affiche l'erreur",
+    async () => {
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      server.use(http.patch("*/demandes/:id/fdr/", () => new HttpResponse(null, { status: 500 })));
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+      await remplirLes5Sections(user);
+
+      await user.click(screen.getByRole("button", { name: "Confirmer les informations" }));
+
+      expect(
+        await screen.findByText("Impossible d'enregistrer le formulaire de déclaration du risque."),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirmer les informations" })).toBeInTheDocument();
+      expect(screen.queryByText("Pièces & risque (page)")).not.toBeInTheDocument();
+    },
+    15000,
+  );
+
+  it(
+    "incohérence croisée révélée après coup (prestation >= nouveau montant_total) : rouvre Intervention, affiche l'erreur, sans PATCH ni navigation",
+    async () => {
+      // Aucun handler PATCH n'est enregistré pour /fdr/ dans ce test :
+      // onUnhandledRequest: "error" (test/setup.ts) fait échouer le test si le
+      // code tentait quand même d'envoyer la requête.
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+      await remplirLes5Sections(user);
+
+      await user.click(screen.getByRole("button", { name: "Modifier l'étape Usage & calendrier" }));
+      await user.clear(screen.getByLabelText("Montant total (€)"));
+      await user.type(screen.getByLabelText("Montant total (€)"), "100000");
+      await user.click(screen.getByRole("button", { name: "Valider" }));
+
+      await user.click(screen.getByRole("button", { name: "Confirmer les informations" }));
+
+      expect(
+        await screen.findByText("Le montant de la prestation doit être strictement inférieur au montant total."),
+      ).toBeInTheDocument();
+           expect(screen.queryByRole("button", { name: "Modifier l'étape Intervention" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Pièces & risque (page)")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Certaines informations doivent être complétées et validées avant de continuer."),
+      ).toBeInTheDocument();
+    },
+    15000,
+  );
+
+  it("formulaire incomplet dès le départ : bouton cliquable, aucun PATCH, aucune navigation, message global affiché, Assuré rouvert", async () => {
+    // Aucun handler PATCH n'est enregistré pour /fdr/ : onUnhandledRequest: "error"
+    // (test/setup.ts) ferait échouer le test si le code tentait quand même la requête.
     const user = userEvent.setup();
     mockDemande(demandeApi());
     renderWizard();
     await screen.findByLabelText("Nom / raison sociale");
 
-    await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-    await screen.findByLabelText("Nom du chantier");
+    await user.click(screen.getByRole("button", { name: "Confirmer les informations" }));
 
-    await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
-    await user.type(screen.getByLabelText("Ville"), "Lyon");
-    await user.selectOptions(screen.getByLabelText("Type de chantier"), "Construction neuve");
-    await user.click(within(screen.getByRole("radiogroup", { name: "Chantier atypique ?" })).getByLabelText("Non"));
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-    await screen.findByLabelText("Usage");
+    expect(
+      await screen.findByText("Certaines informations doivent être complétées et validées avant de continuer."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Le nom de l'assuré est obligatoire.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom / raison sociale")).toBeInTheDocument();
+    expect(screen.queryByText("Pièces & risque (page)")).not.toBeInTheDocument();
+  });
 
-    await user.selectOptions(screen.getByLabelText("Usage"), "Bureau");
-    fireEvent.change(screen.getByLabelText("Date de début"), { target: { value: "2026-01-10" } });
-    fireEvent.change(screen.getByLabelText("Date de fin"), { target: { value: "2026-06-30" } });
-    await user.type(screen.getByLabelText("Montant total (€)"), "500000");
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-    await screen.findByLabelText("Description des travaux");
+  it("Modifier une seule section d'un FDR complet : seule cette section devient éditable, les autres restent validées", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi({}, FDR_COMPLET));
+    renderWizard();
+    await screen.findByText("AXA Construction");
 
-    await user.type(screen.getByLabelText("Description des travaux"), "Rénovation complète");
-    await user.type(screen.getByLabelText("Montant de la prestation (€)"), "120000");
-    await user.selectOptions(screen.getByLabelText("Type d'intervention"), "Entreprise principale");
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-    await screen.findByText("L'activité est-elle couverte par le contrat ?");
+    await user.click(screen.getByRole("button", { name: "Modifier l'étape Chantier" }));
 
-    await user.click(within(screen.getByRole("radiogroup", { name: "L'activité est-elle couverte par le contrat ?" })).getByLabelText("Oui"));
-    await user.click(within(screen.getByRole("radiogroup", { name: "Les travaux sont-ils standards ?" })).getByLabelText("Oui"));
-    await user.click(screen.getByRole("button", { name: "Valider" }));
-
-    expect(await screen.findAllByText("Oui")).toHaveLength(2);
+    expect(screen.getByLabelText("Nom du chantier")).toBeInTheDocument();
+    for (const titre of ["Assuré", "Usage & calendrier", "Intervention", "Questions métier"]) {
+      expect(screen.getByRole("button", { name: `Modifier l'étape ${titre}` })).toBeInTheDocument();
+    }
     expect(screen.getByRole("button", { name: "Confirmer les informations" })).not.toBeDisabled();
+  });
+
+  it("Valider une section modifiée d'un FDR complet la revalide, sans forcer la progression dans les autres blocs", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi({}, FDR_COMPLET));
+    renderWizard();
+    await screen.findByText("AXA Construction");
+
+    await user.click(screen.getByRole("button", { name: "Modifier l'étape Chantier" }));
+    await user.clear(screen.getByLabelText("Nom du chantier"));
+    await user.type(screen.getByLabelText("Nom du chantier"), "Tour Zénith");
+    await user.click(screen.getByRole("button", { name: "Valider" }));
+
+    expect(await screen.findByText("Tour Zénith")).toBeInTheDocument();
+    for (const titre of TITRES_SECTIONS) {
+      expect(screen.getByRole("button", { name: `Modifier l'étape ${titre}` })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole("button", { name: "Valider" })).not.toBeInTheDocument();
+  });
+
+  it("section ouverte via Modifier mais non revalidée : Confirmer ne PATCH pas même si les valeurs sont techniquement valides", async () => {
+    // Aucun handler PATCH n'est enregistré pour /fdr/ : onUnhandledRequest: "error"
+    // ferait échouer le test si le code tentait quand même la requête (le bouton
+    // local "Valider" de la section garde donc son sens métier).
+    const user = userEvent.setup();
+    mockDemande(demandeApi({}, FDR_COMPLET));
+    renderWizard();
+    await screen.findByText("AXA Construction");
+
+    await user.click(screen.getByRole("button", { name: "Modifier l'étape Chantier" }));
+    await user.click(screen.getByRole("button", { name: "Confirmer les informations" }));
+
+    expect(
+      await screen.findByText("Certaines informations doivent être complétées et validées avant de continuer."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom du chantier")).toBeInTheDocument();
+    expect(screen.queryByText("Pièces & risque (page)")).not.toBeInTheDocument();
   });
 });
 

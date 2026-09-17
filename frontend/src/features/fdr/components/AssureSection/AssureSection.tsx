@@ -1,11 +1,10 @@
 import { Button, Restitution, TextInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
 import { useFormContext } from "react-hook-form";
 
+import { CHAMPS_ASSURE } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
 import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const CHAMPS_ASSURE = ["assure_nom", "assure_ville", "assure_numero_contrat"] as const;
 
 export const AssureSection = ({
   etat,
