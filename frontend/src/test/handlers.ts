@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 
 import type { Utilisateur } from "../api/auth";
-import type { Demande, DemandesPaginees } from "../api/demandes";
+import type { Demande, DemandesPaginees, FormulaireRisqueApi } from "../api/demandes";
 
 export const UTILISATEUR_DISTRIBUTEUR: Utilisateur = {
   id: 1,
@@ -70,12 +70,34 @@ export const handlers = [
   }),
 
   http.get("*/demandes/:id/", ({ params }) => {
-    const demande: Demande = {
+    const fdr: FormulaireRisqueApi = {
+      assure_nom: "",
+      assure_ville: "",
+      assure_numero_contrat: "",
+      chantier_nom: "",
+      chantier_ville: "",
+      type_chantier: "",
+      modification_structure: null,
+      chantier_atypique: null,
+      usage: "",
+      usage_autre_texte: "",
+      date_debut: null,
+      date_fin: null,
+      montant_total: null,
+      intervention_description: "",
+      intervention_montant_prestation: null,
+      intervention_type: "",
+      activite_couverte: null,
+      activite_non_couverte_texte: "",
+      travaux_standards: null,
+    };
+    const demande: Demande & { fdr: FormulaireRisqueApi } = {
       id: params.id as string,
       distributeur: 1,
       statut: "BROUILLON",
       created_at: "2026-09-16T09:00:00Z",
       updated_at: "2026-09-16T09:00:00Z",
+      fdr,
     };
     return HttpResponse.json(demande);
   }),

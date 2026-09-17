@@ -128,3 +128,42 @@ body {
 .skip-link:focus {
   left: 0;
 }
+
+/*
+ * Parcours FDR — les 5 sections utilisent VerticalStep (Canopée) qui gère
+ * lui-même cercles/axe vertical/états/action Modifier (VerticalStep.css) :
+ * aucun CSS custom pour ça, CSS natif de VerticalStep non touché.
+ *
+ * VerticalStep ne contraint pas la largeur de son contenu (`>section` est
+ * simplement `grid-area:content`, sans max-width) : dans .container
+ * (max-width:1440px), la zone de contenu peut dépasser 1000px. Restitution
+ * (Canopée) répartit alors son <dt>/<dd> en 50/50 sur toute cette largeur
+ * (.af-restitution__listdef{flex-basis:50%}) — le libellé, aligné à droite
+ * dans sa moitié, se retrouve visuellement loin du bord gauche ("centré").
+ * Un wrapper local dans form/restitution (pas de CSS Restitution/VerticalStep
+ * touché) suffit à contenir cette largeur, pour form et restitution à
+ * l'identique afin que les deux démarrent sur la même verticale au moment
+ * du Valider.
+ */
+.fdr-step-contenu {
+  max-width: 40rem;
+}
+
+/* Restitution (dl) a margin:0 (voir Restitution.css Canopée) : les lignes empilées se touchent sans ce gap. */
+.fdr-step-contenu--restitution {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/*
+ * Actions globales de l'étape Informations (Retour / Confirmer), sous la
+ * dernière section — distinctes de l'action Modifier intégrée à chaque
+ * VerticalStep.
+ */
+.fdr-actions-globales {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+}

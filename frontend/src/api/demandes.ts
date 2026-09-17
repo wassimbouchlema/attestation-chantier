@@ -24,6 +24,45 @@ export interface Demande {
   updated_at: string;
 }
 
+export type TypeChantier = "" | "NEUVE" | "RENOVATION";
+export type UsageChantier = "" | "HABITATION" | "BUREAU" | "COMMERCE" | "AUTRE";
+export type TypeIntervention = "" | "PRINCIPALE" | "SOUS_TRAITANT";
+
+/**
+ * Reflète exactement `FormulaireRisqueSerializer` (backend/demandes/serializers.py).
+ * Les champs texte/choix sont `blank=True` sans `null=True` : jamais `null`
+ * côté API, toujours `""` au minimum. Les dates/décimaux/booléens sont
+ * `null=True` : `null` tant qu'aucune valeur n'a été saisie. Les décimaux
+ * sont sérialisés en chaîne par DRF (COERCE_DECIMAL_TO_STRING, réglage par
+ * défaut non modifié dans settings.py), jamais en `number`.
+ */
+export interface FormulaireRisqueApi {
+  assure_nom: string;
+  assure_ville: string;
+  assure_numero_contrat: string;
+  chantier_nom: string;
+  chantier_ville: string;
+  type_chantier: TypeChantier;
+  modification_structure: boolean | null;
+  chantier_atypique: boolean | null;
+  usage: UsageChantier;
+  usage_autre_texte: string;
+  date_debut: string | null;
+  date_fin: string | null;
+  montant_total: string | null;
+  intervention_description: string;
+  intervention_montant_prestation: string | null;
+  intervention_type: TypeIntervention;
+  activite_couverte: boolean | null;
+  activite_non_couverte_texte: string;
+  travaux_standards: boolean | null;
+}
+
+/** Forme renvoyée par `GET /demandes/{id}/` (DemandeDetailSerializer) : la Demande avec son FDR imbriqué en lecture seule. */
+export interface DemandeDetail extends Demande {
+  fdr: FormulaireRisqueApi;
+}
+
 export interface DemandesPaginees {
   count: number;
   next: string | null;
@@ -55,7 +94,7 @@ export const listerDemandes = async (
   return lireJson<DemandesPaginees>(response, messageIndisponible);
 };
 
-export const recupererDemande = async (id: string, signal?: AbortSignal): Promise<Demande> => {
+export const recupererDemande = async (id: string, signal?: AbortSignal): Promise<DemandeDetail> => {
   const messageIndisponible = "Impossible de récupérer cette demande.";
   const response = await requeteAuthentifiee(`/demandes/${id}/`, { signal });
   if (response.status === 404) {
@@ -64,7 +103,7 @@ export const recupererDemande = async (id: string, signal?: AbortSignal): Promis
   if (!response.ok) {
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
-  return lireJson<Demande>(response, messageIndisponible);
+  return lireJson<DemandeDetail>(response, messageIndisponible);
 };
 
 export const creerDemande = async (signal?: AbortSignal): Promise<Demande> => {
