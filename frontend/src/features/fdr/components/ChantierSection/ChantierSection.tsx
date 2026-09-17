@@ -1,15 +1,10 @@
-import { useEffect, useRef } from "react";
-
 import { Button, ChoiceInput, Restitution, SelectInput, TextInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller } from "react-hook-form";
 
 import { OPTIONS_TYPE_CHANTIER } from "../../constants/optionsTypeChantier";
-import { CHAMPS_CHANTIER } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
-import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const libelleOuiNon = (valeur: boolean | null): string => (valeur === true ? "Oui" : valeur === false ? "Non" : "—");
+import { useChantierSection } from "./useChantierSection";
 
 export const ChantierSection = ({
   etat,
@@ -25,46 +20,15 @@ export const ChantierSection = ({
   const {
     register,
     control,
-    trigger,
-    watch,
-    setValue,
-    setFocus,
-    formState: { errors },
-  } = useFormContext<FdrFormValues>();
-
-  const typeChantier = watch("type_chantier");
-
-  const typeChantierPrecedentRef = useRef(typeChantier);
-  useEffect(() => {
-    const precedent = typeChantierPrecedentRef.current;
-    typeChantierPrecedentRef.current = typeChantier;
-    if (precedent === typeChantier) {
-      return;
-    }
-    if (typeChantier !== "RENOVATION") {
-      setValue("modification_structure", null);
-    }
-  }, [typeChantier, setValue]);
-
-  const handleValider = async () => {
-    const estValide = await trigger(CHAMPS_CHANTIER);
-    if (estValide) {
-      onValide();
-      return;
-    }
-    const premierChampInvalide = CHAMPS_CHANTIER.find((champ) => errors[champ]);
-    if (premierChampInvalide) {
-      setFocus(premierChampInvalide);
-    }
-  };
-
-  const [nom, ville, type, modifStructure, atypique] = watch([
-    "chantier_nom",
-    "chantier_ville",
-    "type_chantier",
-    "modification_structure",
-    "chantier_atypique",
-  ]);
+    errors,
+    valider,
+    chantierEstRenovation,
+    nom,
+    ville,
+    typeChantierLabel,
+    modificationStructureLabel,
+    chantierAtypiqueLabel,
+  } = useChantierSection(onValide);
 
   return (
     <VerticalStep
@@ -77,9 +41,9 @@ export const ChantierSection = ({
         <div className="fdr-step-contenu fdr-step-contenu--restitution">
           <Restitution label="Nom du chantier">{nom}</Restitution>
           <Restitution label="Ville">{ville}</Restitution>
-          <Restitution label="Type de chantier">{OPTIONS_TYPE_CHANTIER.find((option) => option.value === type)?.label}</Restitution>
-          {type === "RENOVATION" && <Restitution label="Modification de structure">{libelleOuiNon(modifStructure)}</Restitution>}
-          <Restitution label="Chantier atypique">{libelleOuiNon(atypique)}</Restitution>
+          <Restitution label="Type de chantier">{typeChantierLabel}</Restitution>
+          {chantierEstRenovation && <Restitution label="Modification de structure">{modificationStructureLabel}</Restitution>}
+          <Restitution label="Chantier atypique">{chantierAtypiqueLabel}</Restitution>
         </div>
       }
       form={
@@ -110,7 +74,7 @@ export const ChantierSection = ({
             message={errors.type_chantier?.message}
             forceDisplayMessage={Boolean(errors.type_chantier)}
           />
-          {typeChantier === "RENOVATION" && (
+          {chantierEstRenovation && (
             <Controller
               name="modification_structure"
               control={control}
@@ -144,7 +108,7 @@ export const ChantierSection = ({
               />
             )}
           />
-          <Button variant="primary" onClick={handleValider}>
+          <Button variant="primary" onClick={valider}>
             Valider
           </Button>
         </div>

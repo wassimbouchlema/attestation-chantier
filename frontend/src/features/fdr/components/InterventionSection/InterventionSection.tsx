@@ -1,12 +1,10 @@
 import { Button, NumberInput, Restitution, SelectInput, TextareaInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller } from "react-hook-form";
 
 import { OPTIONS_INTERVENTION_TYPE } from "../../constants/optionsInterventionType";
-import { CHAMPS_INTERVENTION } from "../../constants/sections";
-import { formatMontant } from "../../helpers/formatMontant";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
-import type { FdrFormValues } from "../../types/FdrFormValues";
+import { useInterventionSection } from "./useInterventionSection";
 
 export const InterventionSection = ({
   etat,
@@ -19,28 +17,8 @@ export const InterventionSection = ({
   onValide: () => void;
   onModifier: () => void;
 }) => {
-  const {
-    register,
-    control,
-    trigger,
-    watch,
-    setFocus,
-    formState: { errors },
-  } = useFormContext<FdrFormValues>();
-
-  const handleValider = async () => {
-    const estValide = await trigger(CHAMPS_INTERVENTION);
-    if (estValide) {
-      onValide();
-      return;
-    }
-    const premierChampInvalide = CHAMPS_INTERVENTION.find((champ) => errors[champ]);
-    if (premierChampInvalide) {
-      setFocus(premierChampInvalide);
-    }
-  };
-
-  const [description, montantPrestation, type] = watch(CHAMPS_INTERVENTION);
+  const { register, control, errors, valider, description, montantPrestationLabel, typeInterventionLabel } =
+    useInterventionSection(onValide);
 
   return (
     <VerticalStep
@@ -52,8 +30,8 @@ export const InterventionSection = ({
       restitution={
         <div className="fdr-step-contenu fdr-step-contenu--restitution">
           <Restitution label="Description">{description}</Restitution>
-          <Restitution label="Montant de la prestation">{formatMontant(montantPrestation)}</Restitution>
-          <Restitution label="Type d'intervention">{OPTIONS_INTERVENTION_TYPE.find((option) => option.value === type)?.label}</Restitution>
+          <Restitution label="Montant de la prestation">{montantPrestationLabel}</Restitution>
+          <Restitution label="Type d'intervention">{typeInterventionLabel}</Restitution>
         </div>
       }
       form={
@@ -97,7 +75,7 @@ export const InterventionSection = ({
             message={errors.intervention_type?.message}
             forceDisplayMessage={Boolean(errors.intervention_type)}
           />
-          <Button variant="primary" onClick={handleValider}>
+          <Button variant="primary" onClick={valider}>
             Valider
           </Button>
         </div>

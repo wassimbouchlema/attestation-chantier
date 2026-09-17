@@ -1,10 +1,8 @@
 import { Button, Restitution, TextInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
-import { useFormContext } from "react-hook-form";
 
-import { CHAMPS_ASSURE } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
-import type { FdrFormValues } from "../../types/FdrFormValues";
+import { useAssureSection } from "./useAssureSection";
 
 export const AssureSection = ({
   etat,
@@ -17,27 +15,7 @@ export const AssureSection = ({
   onValide: () => void;
   onModifier: () => void;
 }) => {
-  const {
-    register,
-    trigger,
-    watch,
-    setFocus,
-    formState: { errors },
-  } = useFormContext<FdrFormValues>();
-
-  const handleValider = async () => {
-    const estValide = await trigger(CHAMPS_ASSURE);
-    if (estValide) {
-      onValide();
-      return;
-    }
-    const premierChampInvalide = CHAMPS_ASSURE.find((champ) => errors[champ]);
-    if (premierChampInvalide) {
-      setFocus(premierChampInvalide);
-    }
-  };
-
-  const [nom, ville, numeroContrat] = watch(CHAMPS_ASSURE);
+  const { register, errors, valider, nom, ville, numeroContrat } = useAssureSection(onValide);
 
   return (
     <VerticalStep
@@ -80,7 +58,7 @@ export const AssureSection = ({
             message={errors.assure_numero_contrat?.message}
             forceDisplayMessage={Boolean(errors.assure_numero_contrat)}
           />
-          <Button variant="primary" onClick={handleValider}>
+          <Button variant="primary" onClick={valider}>
             Valider
           </Button>
         </div>

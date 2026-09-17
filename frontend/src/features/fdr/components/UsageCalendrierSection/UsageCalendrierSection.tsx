@@ -1,5 +1,3 @@
-import { useEffect, useRef } from "react";
-
 import {
   Button,
   DateInput,
@@ -9,15 +7,12 @@ import {
   TextareaInput,
   VerticalStep,
 } from "@axa-fr/canopee-react/distributeur";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller } from "react-hook-form";
 
 import { OPTIONS_USAGE } from "../../constants/optionsUsage";
-import { CHAMPS_USAGE_CALENDRIER } from "../../constants/sections";
-import { formatDateFr } from "../../helpers/formatDateFr";
-import { formatMontant } from "../../helpers/formatMontant";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
-import type { FdrFormValues } from "../../types/FdrFormValues";
+import { useUsageCalendrierSection } from "./useUsageCalendrierSection";
 
 export const UsageCalendrierSection = ({
   etat,
@@ -33,46 +28,14 @@ export const UsageCalendrierSection = ({
   const {
     register,
     control,
-    trigger,
-    watch,
-    setValue,
-    setFocus,
-    formState: { errors },
-  } = useFormContext<FdrFormValues>();
-
-  const usage = watch("usage");
-
-  const usagePrecedentRef = useRef(usage);
-  useEffect(() => {
-    const precedent = usagePrecedentRef.current;
-    usagePrecedentRef.current = usage;
-    if (precedent === usage) {
-      return;
-    }
-    if (usage !== "AUTRE") {
-      setValue("usage_autre_texte", "");
-    }
-  }, [usage, setValue]);
-
-  const handleValider = async () => {
-    const estValide = await trigger(CHAMPS_USAGE_CALENDRIER);
-    if (estValide) {
-      onValide();
-      return;
-    }
-    const premierChampInvalide = CHAMPS_USAGE_CALENDRIER.find((champ) => errors[champ]);
-    if (premierChampInvalide) {
-      setFocus(premierChampInvalide);
-    }
-  };
-
-  const [usageValeur, usageAutreTexte, dateDebut, dateFin, montantTotal] = watch([
-    "usage",
-    "usage_autre_texte",
-    "date_debut",
-    "date_fin",
-    "montant_total",
-  ]);
+    errors,
+    valider,
+    usageEstAutre,
+    usageLabel,
+    usageAutreTexte,
+    datesLabel,
+    montantTotalLabel,
+  } = useUsageCalendrierSection(onValide);
 
   return (
     <VerticalStep
@@ -84,13 +47,11 @@ export const UsageCalendrierSection = ({
       restitution={
         <div className="fdr-step-contenu fdr-step-contenu--restitution">
           <Restitution label="Usage">
-            {OPTIONS_USAGE.find((option) => option.value === usageValeur)?.label}
-            {usageValeur === "AUTRE" && ` — ${usageAutreTexte}`}
+            {usageLabel}
+            {usageEstAutre && ` — ${usageAutreTexte}`}
           </Restitution>
-          <Restitution label="Dates">
-            Du {formatDateFr(dateDebut)} au {formatDateFr(dateFin)}
-          </Restitution>
-          <Restitution label="Montant total">{formatMontant(montantTotal)}</Restitution>
+          <Restitution label="Dates">{datesLabel}</Restitution>
+          <Restitution label="Montant total">{montantTotalLabel}</Restitution>
         </div>
       }
       form={
@@ -105,7 +66,7 @@ export const UsageCalendrierSection = ({
             message={errors.usage?.message}
             forceDisplayMessage={Boolean(errors.usage)}
           />
-          {usage === "AUTRE" && (
+          {usageEstAutre && (
             <TextareaInput
               label="Précision de l'usage"
               labelPosition="top"
@@ -158,7 +119,7 @@ export const UsageCalendrierSection = ({
               />
             )}
           />
-          <Button variant="primary" onClick={handleValider}>
+          <Button variant="primary" onClick={valider}>
             Valider
           </Button>
         </div>

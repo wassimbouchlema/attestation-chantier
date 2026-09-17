@@ -1,14 +1,9 @@
-import { useEffect, useRef } from "react";
-
 import { Button, ChoiceInput, Restitution, TextareaInput, VerticalStep } from "@axa-fr/canopee-react/distributeur";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller } from "react-hook-form";
 
-import { CHAMPS_QUESTIONS_METIER } from "../../constants/sections";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
-import type { FdrFormValues } from "../../types/FdrFormValues";
-
-const libelleOuiNon = (valeur: boolean | null): string => (valeur === true ? "Oui" : valeur === false ? "Non" : "—");
+import { useQuestionsMetierSection } from "./useQuestionsMetierSection";
 
 export const QuestionsMetierSection = ({
   etat,
@@ -24,40 +19,13 @@ export const QuestionsMetierSection = ({
   const {
     register,
     control,
-    trigger,
-    watch,
-    setValue,
-    setFocus,
-    formState: { errors },
-  } = useFormContext<FdrFormValues>();
-
-  const activiteCouverte = watch("activite_couverte");
-
-  const activiteCouvertePrecedenteRef = useRef(activiteCouverte);
-  useEffect(() => {
-    const precedente = activiteCouvertePrecedenteRef.current;
-    activiteCouvertePrecedenteRef.current = activiteCouverte;
-    if (precedente === activiteCouverte) {
-      return;
-    }
-    if (activiteCouverte !== false) {
-      setValue("activite_non_couverte_texte", "");
-    }
-  }, [activiteCouverte, setValue]);
-
-  const handleValider = async () => {
-    const estValide = await trigger(CHAMPS_QUESTIONS_METIER);
-    if (estValide) {
-      onValide();
-      return;
-    }
-    const premierChampInvalide = CHAMPS_QUESTIONS_METIER.find((champ) => errors[champ]);
-    if (premierChampInvalide) {
-      setFocus(premierChampInvalide);
-    }
-  };
-
-  const [couverte, texteNonCouverte, travauxStandards] = watch(CHAMPS_QUESTIONS_METIER);
+    errors,
+    valider,
+    activiteNonCouverte,
+    activiteCouverteLabel,
+    texteNonCouverte,
+    travauxStandardsLabel,
+  } = useQuestionsMetierSection(onValide);
 
   return (
     <VerticalStep
@@ -69,10 +37,10 @@ export const QuestionsMetierSection = ({
       restitution={
         <div className="fdr-step-contenu fdr-step-contenu--restitution">
           <Restitution label="Activité couverte">
-            {libelleOuiNon(couverte)}
-            {couverte === false && ` — ${texteNonCouverte}`}
+            {activiteCouverteLabel}
+            {activiteNonCouverte && ` — ${texteNonCouverte}`}
           </Restitution>
-          <Restitution label="Travaux standards">{libelleOuiNon(travauxStandards)}</Restitution>
+          <Restitution label="Travaux standards">{travauxStandardsLabel}</Restitution>
         </div>
       }
       form={
@@ -93,7 +61,7 @@ export const QuestionsMetierSection = ({
               />
             )}
           />
-          {activiteCouverte === false && (
+          {activiteNonCouverte && (
             <TextareaInput
               label="Explication"
               labelPosition="top"
@@ -119,7 +87,7 @@ export const QuestionsMetierSection = ({
               />
             )}
           />
-          <Button variant="primary" onClick={handleValider}>
+          <Button variant="primary" onClick={valider}>
             Valider
           </Button>
         </div>
