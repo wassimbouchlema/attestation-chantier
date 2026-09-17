@@ -3,7 +3,7 @@ from pathlib import Path
 from rest_framework import serializers
 
 from .evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
-from .models import Demande, FormulaireRisque, PieceJustificative, TypeChantier, Usage
+from .models import Demande, FormulaireRisque, Notification, PieceJustificative, TypeChantier, Usage
 from .rules import TYPES_PIECES_AUTORISES
 
 EXTENSIONS_PIECES_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -13,7 +13,7 @@ CONTENT_TYPES_PIECES_AUTORISES = {"application/pdf", "image/jpeg", "image/png"}
 class DemandeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Demande
-        fields = ["id", "distributeur", "statut", "created_at", "updated_at"]
+        fields = ["id", "distributeur", "statut", "created_at", "updated_at", "envoye_at"]
         read_only_fields = fields
 
 
@@ -106,7 +106,24 @@ class DemandeDetailSerializer(DemandeSerializer):
     fdr = FormulaireRisqueSerializer(read_only=True)
 
     class Meta(DemandeSerializer.Meta):
-        fields = DemandeSerializer.Meta.fields + ["fdr"]
+        fields = DemandeSerializer.Meta.fields + ["commentaire_distributeur", "fdr"]
+
+
+class CommentaireDistributeurSerializer(serializers.ModelSerializer):
+    """Action ciblée `PATCH /demandes/{id}/commentaire/` — jamais un PATCH générique sur Demande."""
+
+    class Meta:
+        model = Demande
+        fields = ["commentaire_distributeur"]
+
+
+class EnvoyerDemandeSerializer(serializers.Serializer):
+    """Entrée de `POST /demandes/{id}/envoyer/` : uniquement le commentaire courant,
+    optionnel. `statut`/`envoye_at`/`fdr_pdf` ne sont jamais writable depuis le frontend."""
+
+    commentaire_distributeur = serializers.CharField(
+        required=False, allow_blank=True, trim_whitespace=False
+    )
 
 
 class PieceJustificativeSerializer(serializers.ModelSerializer):
@@ -145,3 +162,16 @@ class EvaluationRisqueSerializer(serializers.Serializer):
         choices=[NIVEAU_FAIBLE, NIVEAU_MODERE, NIVEAU_ELEVE], read_only=True
     )
     synthese = serializers.CharField(read_only=True)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    demande_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = ["id", "type_notification", "titre", "message", "demande_id", "created_at", "seen_at"]
+        read_only_fields = fields
+
+
+class MarquerNotificationsVuesSerializer(serializers.Serializer):
+    ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)

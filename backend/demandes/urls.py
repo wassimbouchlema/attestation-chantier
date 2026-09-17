@@ -1,10 +1,11 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from .views import DemandeViewSet, PieceJustificativeViewSet
+from .views import DemandeViewSet, NotificationViewSet, PieceJustificativeViewSet
 
 router = SimpleRouter(use_regex_path=False)
 router.register("demandes", DemandeViewSet, basename="demande")
+router.register("notifications", NotificationViewSet, basename="notification")
 
 urlpatterns = router.urls + [
     path(

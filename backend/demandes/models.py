@@ -12,6 +12,13 @@ class StatutDemande(models.TextChoices):
     TRAITE = "TRAITE", "Traité"
 
 
+def chemin_upload_fdr_pdf(instance, filename):
+    # Même principe que `chemin_upload_piece` : chemin de stockage opaque,
+    # seule l'extension du nom fourni est reprise.
+    extension = Path(filename).suffix
+    return f"fdr-pdf/{instance.id}/{uuid.uuid4()}{extension}"
+
+
 class Demande(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     distributeur = models.ForeignKey(
@@ -26,6 +33,11 @@ class Demande(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Envoi au siège (Validation & envoi)
+    commentaire_distributeur = models.TextField(blank=True, default="")
+    envoye_at = models.DateTimeField(null=True, blank=True)
+    fdr_pdf = models.FileField(upload_to=chemin_upload_fdr_pdf, null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -154,3 +166,34 @@ class PieceJustificative(models.Model):
 
     class Meta:
         ordering = ["uploaded_at", "id"]
+
+
+class TypeNotification(models.TextChoices):
+    DEMANDE_ENVOYEE = "DEMANDE_ENVOYEE", "Demande envoyée"
+
+
+class Notification(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    destinataire = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    demande = models.ForeignKey(Demande, on_delete=models.CASCADE, related_name="notifications")
+    type_notification = models.CharField(max_length=30, choices=TypeNotification.choices)
+    titre = models.CharField(max_length=255)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Sémantique "centre de notifications" (badge), pas "lue/non lue" : seen_at
+    # null contribue au badge de non-vues, seen_at renseigné n'y contribue plus.
+    # La notification reste toujours visible dans l'historique, jamais supprimée.
+    seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(type_notification__in=TypeNotification.values),
+                name="notification_type_valide",
+            ),
+        ]
