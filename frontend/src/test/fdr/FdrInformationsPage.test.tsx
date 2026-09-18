@@ -104,6 +104,8 @@ const demandeApi = (overrides: Partial<Demande> = {}, fdr: FormulaireRisqueApi =
   statut: "BROUILLON",
   created_at: "2026-09-10T08:00:00Z",
   updated_at: "2026-09-12T10:30:00Z",
+  envoye_at: null,
+  commentaire_distributeur: "",
   fdr,
   ...overrides,
 });

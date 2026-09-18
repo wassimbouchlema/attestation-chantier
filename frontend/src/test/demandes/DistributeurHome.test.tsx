@@ -18,6 +18,11 @@ const DemandeDetailStub = () => {
   return <p>Détail de la demande {id}</p>;
 };
 
+const ConsultationStub = () => {
+  const { id } = useParams<{ id: string }>();
+  return <p>Consultation de la demande {id}</p>;
+};
+
 const renderPage = (chemin = "/distributeur") =>
   render(
     <AuthProvider>
@@ -26,6 +31,7 @@ const renderPage = (chemin = "/distributeur") =>
           <Routes>
             <Route path="/distributeur" element={<DistributeurHome />} />
             <Route path="/distributeur/demandes/:id" element={<DemandeDetailStub />} />
+            <Route path="/distributeur/demandes/:id/consultation" element={<ConsultationStub />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -38,6 +44,7 @@ const creerDemande = (overrides: Partial<Demande> = {}): Demande => ({
   statut: "BROUILLON",
   created_at: "2026-09-10T08:00:00Z",
   updated_at: "2026-09-11T08:00:00Z",
+  envoye_at: null,
   ...overrides,
 });
 
@@ -222,5 +229,69 @@ describe("DistributeurHome — création d'une demande", () => {
     expect(await screen.findByText("Impossible de créer la demande.")).toBeInTheDocument();
     expect(screen.getByText("Aucune demande pour le moment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Nouvelle demande" })).not.toBeDisabled();
+  });
+});
+
+describe("DistributeurHome — message de succès (état de navigation)", () => {
+  it("affiche le message ponctuel transmis via le state de navigation (ex. brouillon enregistré)", async () => {
+    server.use(http.get("*/demandes/", () => HttpResponse.json(paginer([]))));
+    render(
+      <AuthProvider>
+        <QueryClientProvider client={createQueryClient()}>
+          <MemoryRouter
+            initialEntries={[
+              {
+                pathname: "/distributeur",
+                state: { successMessage: "Demande enregistrée en brouillon. Vous pourrez la reprendre ultérieurement." },
+              },
+            ]}
+          >
+            <Routes>
+              <Route path="/distributeur" element={<DistributeurHome />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AuthProvider>,
+    );
+
+    expect(
+      await screen.findByText("Demande enregistrée en brouillon. Vous pourrez la reprendre ultérieurement."),
+    ).toBeInTheDocument();
+  });
+
+  it("n'affiche aucun message quand la page est ouverte sans état de navigation", async () => {
+    server.use(http.get("*/demandes/", () => HttpResponse.json(paginer([]))));
+    renderPage();
+    await screen.findByText("Aucune demande pour le moment.");
+
+    expect(screen.queryByText(/enregistrée en brouillon/)).not.toBeInTheDocument();
+  });
+});
+
+describe("DistributeurHome — action par statut (Modifier / Consulter)", () => {
+  it("BROUILLON : le lien Modifier ouvre le wizard", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "BROUILLON" })]))),
+    );
+    renderPage();
+    await screen.findByRole("cell", { name: "Brouillon" });
+
+    await user.click(screen.getByRole("link", { name: /Modifier/ }));
+
+    expect(await screen.findByText(/Détail de la demande/)).toBeInTheDocument();
+  });
+
+  it("EN_COURS : le lien Consulter ouvre la consultation en lecture seule", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "EN_COURS" })]))),
+    );
+    renderPage();
+    await screen.findByRole("cell", { name: "En cours" });
+
+    await user.click(screen.getByRole("link", { name: /Consulter/ }));
+
+    expect(await screen.findByText(/Consultation de la demande/)).toBeInTheDocument();
   });
 });

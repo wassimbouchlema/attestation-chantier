@@ -1,4 +1,5 @@
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { TAILLE_PAGE, type StatutDemande } from "../../api/demandes";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
@@ -6,11 +7,28 @@ import { parseFiltresListe } from "../../features/demandes/helpers/parseFiltresL
 import { useCreerDemande, useDemandes } from "../../features/demandes/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
-/** Orchestration de l'écran Mes demandes : filtre/pagination (URL), liste, création. */
+interface EtatNavigationDistributeurHome {
+  successMessage?: string;
+}
+
 export const useDistributeurHome = () => {
   useDocumentTitle("Mes demandes");
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const etatNavigation = location.state as EtatNavigationDistributeurHome | null;
+  const [messageSucces, setMessageSucces] = useState<string | null>(etatNavigation?.successMessage ?? null);
+  const nettoyageEffectueRef = useRef(false);
+  useEffect(() => {
+    if (nettoyageEffectueRef.current) {
+      return;
+    }
+    nettoyageEffectueRef.current = true;
+    if (etatNavigation?.successMessage) {
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, [etatNavigation?.successMessage, location.pathname, location.search, navigate]);
 
   const { statut, page } = parseFiltresListe(searchParams);
   const { data, isLoading, isError, error, refetch } = useDemandes({ statut, page });
@@ -60,6 +78,8 @@ export const useDistributeurHome = () => {
     nombreDePages,
     demandes,
     isLoading,
+    messageSucces,
+    fermerMessageSucces: () => setMessageSucces(null),
     erreurChargement: isError ? messageErreurAffichable(error) : null,
     reessayerChargement: () => refetch(),
     changerStatut,

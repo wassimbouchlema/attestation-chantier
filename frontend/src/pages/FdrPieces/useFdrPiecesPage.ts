@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { DemandeDetail } from "../../api/demandes";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
-/** Orchestration de FdrPiecesPage : lectureSeule, titre de document, navigation de retour. */
+/** Orchestration de FdrPiecesPage : lectureSeule, titre de document, navigation retour/continuer. */
 export const useFdrPiecesPage = (demande: DemandeDetail) => {
   const navigate = useNavigate();
   const lectureSeule = demande.statut !== "BROUILLON";
@@ -13,5 +13,6 @@ export const useFdrPiecesPage = (demande: DemandeDetail) => {
   return {
     lectureSeule,
     retournerAuxInformations: () => navigate(`/distributeur/demandes/${demande.id}/informations`),
+    continuer: () => navigate(`/distributeur/demandes/${demande.id}/validation`),
   };
 };

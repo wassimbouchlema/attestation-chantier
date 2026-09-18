@@ -14,6 +14,8 @@ export const DistributeurHome = () => {
     nombreDePages,
     demandes,
     isLoading,
+    messageSucces,
+    fermerMessageSucces,
     erreurChargement,
     reessayerChargement,
     changerStatut,
@@ -41,6 +43,14 @@ export const DistributeurHome = () => {
             <p role="status" className="sr-only">
               Création de la demande en cours…
             </p>
+          )}
+          {messageSucces && (
+            <Message
+              variant="success"
+              title={messageSucces}
+              onClose={fermerMessageSucces}
+              closeButtonAriaLabel="Fermer"
+            />
           )}
           {erreurCreation && (
             <Message

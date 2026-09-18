@@ -76,7 +76,7 @@ export const PiecesJustificativesSection = ({
                 <Tr>
                   <Th scope="col">Catégorie</Th>
                   <Th scope="col">Fichier</Th>
-                  <Th scope="col">Date d'envoi</Th>
+                  <Th scope="col">Date d'ajout</Th>
                   {!lectureSeule && (
                     <Th scope="col">
                       <span className="sr-only">Action</span>

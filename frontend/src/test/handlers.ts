@@ -93,12 +93,14 @@ export const handlers = [
       activite_non_couverte_texte: "",
       travaux_standards: null,
     };
-    const demande: Demande & { fdr: FormulaireRisqueApi } = {
+    const demande: Demande & { commentaire_distributeur: string; fdr: FormulaireRisqueApi } = {
       id: params.id as string,
       distributeur: 1,
       statut: "BROUILLON",
       created_at: "2026-09-16T09:00:00Z",
       updated_at: "2026-09-16T09:00:00Z",
+      envoye_at: null,
+      commentaire_distributeur: "",
       fdr,
     };
     return HttpResponse.json(demande);
@@ -111,6 +113,7 @@ export const handlers = [
       statut: "BROUILLON",
       created_at: "2026-09-16T09:00:00Z",
       updated_at: "2026-09-16T09:00:00Z",
+      envoye_at: null,
     };
     return HttpResponse.json(demande, { status: 201 });
   }),

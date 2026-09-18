@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { mettreAJourFdr, type FormulaireRisqueApi } from "../../api/demandes";
+import {
+  envoyerDemande,
+  mettreAJourFdr,
+  sauvegarderCommentaire,
+  type DemandeDetail,
+  type FormulaireRisqueApi,
+} from "../../api/demandes";
 import { recupererEvaluationRisque } from "../../api/evaluationRisque";
 import { recupererPieces, supprimerPiece, uploaderPiece, type CategoriePiece } from "../../api/pieces";
 import { demandesKeys } from "../demandes/queries";
@@ -64,5 +70,35 @@ export const useEvaluationRisque = (demandeId: string) => {
   return useQuery({
     queryKey: evaluationRisqueKeys.deDemande(demandeId),
     queryFn: ({ signal }) => recupererEvaluationRisque(demandeId, signal),
+  });
+};
+
+/** Met à jour directement le cache (pas juste une invalidation) : évite un aller-retour réseau pour un seul champ déjà connu. */
+export const useSauvegarderCommentaire = (demandeId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentaireDistributeur: string) => sauvegarderCommentaire(demandeId, commentaireDistributeur),
+    onSuccess: (reponse) => {
+      queryClient.setQueryData(demandesKeys.detail(demandeId), (precedente: DemandeDetail | undefined) =>
+        precedente ? { ...precedente, commentaire_distributeur: reponse.commentaire_distributeur } : precedente,
+      );
+    },
+  });
+};
+
+/**
+ * `setQueryData` (pas seulement `invalidateQueries`) avec la réponse déjà
+ * complète du backend : le cache doit refléter EN_COURS de façon synchrone,
+ * avant même la navigation qui suit — `FdrIndexRedirect` (AppRouter) décide
+ * "informations" vs "consultation" en lisant ce même cache immédiatement.
+ */
+export const useEnvoyerDemande = (demandeId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (commentaireDistributeur: string) => envoyerDemande(demandeId, commentaireDistributeur),
+    onSuccess: (demandeMiseAJour) => {
+      queryClient.setQueryData(demandesKeys.detail(demandeId), demandeMiseAJour);
+      queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
+    },
   });
 };

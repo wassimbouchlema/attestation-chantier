@@ -1,3 +1,4 @@
+import type { CategoriePiece } from "./pieces";
 import { ErreurAuthentification, ErreurReseauOuServeur, lireJson } from "./http";
 import { requeteAuthentifiee } from "./httpAuthentifie";
 
@@ -22,6 +23,7 @@ export interface Demande {
   statut: StatutDemande;
   created_at: string;
   updated_at: string;
+  envoye_at: string | null;
 }
 
 export type TypeChantier = "" | "NEUVE" | "RENOVATION";
@@ -60,6 +62,7 @@ export interface FormulaireRisqueApi {
 
 /** Forme renvoyée par `GET /demandes/{id}/` (DemandeDetailSerializer) : la Demande avec son FDR imbriqué en lecture seule. */
 export interface DemandeDetail extends Demande {
+  commentaire_distributeur: string;
   fdr: FormulaireRisqueApi;
 }
 
@@ -72,6 +75,26 @@ export interface DemandesPaginees {
 
 /** La demande ciblée n'existe pas ou n'appartient pas à l'utilisateur connecté (404). */
 export class ErreurDemandeIntrouvable extends Error {}
+
+export class ErreurDemandeNonModifiable extends Error {}
+
+export class ErreurDossierIncomplet extends Error {
+  piecesManquantes: CategoriePiece[];
+
+  constructor(piecesManquantes: CategoriePiece[]) {
+    super("Le dossier documentaire est incomplet.");
+    this.piecesManquantes = piecesManquantes;
+  }
+}
+
+export class ErreurFdrInvalide extends Error {
+  erreurs: Record<string, string>;
+
+  constructor(erreurs: Record<string, string>) {
+    super("Certaines informations du formulaire sont incomplètes ou incohérentes.");
+    this.erreurs = erreurs;
+  }
+}
 
 export const listerDemandes = async (
   filtres: { statut?: StatutDemande | ""; page?: number },
@@ -135,4 +158,76 @@ export const mettreAJourFdr = async (
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
   return lireJson<FormulaireRisqueApi>(response, messageIndisponible);
+};
+
+/** Action ciblée `PATCH /demandes/{id}/commentaire/` — jamais un PATCH générique sur Demande, reste en BROUILLON. */
+export const sauvegarderCommentaire = async (
+  demandeId: string,
+  commentaireDistributeur: string,
+): Promise<{ commentaire_distributeur: string }> => {
+  const messageIndisponible = "Impossible d'enregistrer le commentaire.";
+  const response = await requeteAuthentifiee(`/demandes/${demandeId}/commentaire/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commentaire_distributeur: commentaireDistributeur }),
+  });
+  if (response.status === 409) {
+    throw new ErreurDemandeNonModifiable("Cette demande n'est plus modifiable (statut différent de BROUILLON).");
+  }
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return lireJson<{ commentaire_distributeur: string }>(response, messageIndisponible);
+};
+
+interface CorpsErreurEnvoi {
+  code?: string;
+  detail?: string;
+  pieces_manquantes?: CategoriePiece[];
+  erreurs?: Record<string, string>;
+}
+
+export const envoyerDemande = async (
+  demandeId: string,
+  commentaireDistributeur: string,
+): Promise<DemandeDetail> => {
+  const messageIndisponible = "Impossible d'envoyer cette demande au siège.";
+  const response = await requeteAuthentifiee(`/demandes/${demandeId}/envoyer/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ commentaire_distributeur: commentaireDistributeur }),
+  });
+
+  if (response.status === 404) {
+    throw new ErreurDemandeIntrouvable("Cette demande est introuvable.");
+  }
+  if (response.status === 409) {
+    throw new ErreurDemandeNonModifiable("Cette demande n'est plus modifiable (statut différent de BROUILLON).");
+  }
+  if (response.status === 400) {
+    const corps = await lireJson<CorpsErreurEnvoi>(response, messageIndisponible);
+    if (corps.code === "DOSSIER_INCOMPLET") {
+      throw new ErreurDossierIncomplet(corps.pieces_manquantes ?? []);
+    }
+    if (corps.code === "FDR_INVALIDE") {
+      throw new ErreurFdrInvalide(corps.erreurs ?? {});
+    }
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return lireJson<DemandeDetail>(response, messageIndisponible);
+};
+
+export const recupererFdrPdf = async (demandeId: string): Promise<Blob> => {
+  const messageIndisponible = "Impossible de récupérer le document PDF.";
+  const response = await requeteAuthentifiee(`/demandes/${demandeId}/fdr-pdf/`);
+  if (response.status === 404) {
+    throw new ErreurReseauOuServeur("Aucun document n'est disponible pour cette demande.");
+  }
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return response.blob();
 };

@@ -1,14 +1,17 @@
-import { Navigate, Route, BrowserRouter, Routes } from "react-router-dom";
+import { Navigate, Route, BrowserRouter, Routes, useOutletContext } from "react-router-dom";
 
 import { useAuth } from "../features/auth/useAuth";
 import { resolveHomePath } from "../features/auth/roleHome";
 import { FdrWizardLayout } from "../features/fdr/components/FdrWizardLayout/FdrWizardLayout";
+import type { FdrOutletContext } from "../features/fdr/types/FdrOutletContext";
 import { AppShell } from "../layout/AppShell";
 import { SessionLoader } from "../layout/SessionLoader";
 import { LoginPage } from "../pages/Login/LoginPage";
+import { DemandeConsultationPage } from "../pages/DemandeConsultationPage/DemandeConsultationPage";
 import { DistributeurHome } from "../pages/DistributeurHome/DistributeurHome";
 import { FdrInformationsPage } from "../pages/FdrInformations/FdrInformationsPage";
 import { FdrPiecesPage } from "../pages/FdrPieces/FdrPiecesPage";
+import { FdrValidationPage } from "../pages/FdrValidationPage/FdrValidationPage";
 import { SiegeHome } from "../pages/SiegeHome/SiegeHome";
 import { ProtectedRoute } from "./ProtectedRoute";
 
@@ -29,6 +32,17 @@ const RoleHomeRedirect = () => {
   }
 
   return <Navigate to={resolveHomePath(utilisateur)} replace />;
+};
+
+const FdrIndexRedirect = () => {
+  const { demande } = useOutletContext<FdrOutletContext>();
+
+  return (
+    <Navigate
+      to={demande.statut === "BROUILLON" ? "informations" : `/distributeur/demandes/${demande.id}/consultation`}
+      replace
+    />
+  );
 };
 
 export const AppRouter = () => {
@@ -53,10 +67,19 @@ export const AppRouter = () => {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="informations" replace />} />
+          <Route index element={<FdrIndexRedirect />} />
           <Route path="informations" element={<FdrInformationsPage />} />
           <Route path="pieces" element={<FdrPiecesPage />} />
+          <Route path="validation" element={<FdrValidationPage />} />
         </Route>
+        <Route
+          path="/distributeur/demandes/:id/consultation"
+          element={
+            <ProtectedRoute roleRequis="DISTRIBUTEUR">
+              <DemandeConsultationPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/siege"
           element={

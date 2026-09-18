@@ -38,12 +38,21 @@ export const DemandesTable = ({
               <Td>{formatDate(demande.created_at)}</Td>
               <Td>{formatDate(demande.updated_at)}</Td>
               <Td>
-                <Link
-                  to={`/distributeur/demandes/${demande.id}`}
-                  aria-label={`Ouvrir la demande du ${formatDate(demande.created_at)}`}
-                >
-                  Ouvrir
-                </Link>
+                {demande.statut === "BROUILLON" ? (
+                  <Link
+                    to={`/distributeur/demandes/${demande.id}`}
+                    aria-label={`Modifier la demande du ${formatDate(demande.created_at)}`}
+                  >
+                    Modifier
+                  </Link>
+                ) : (
+                  <Link
+                    to={`/distributeur/demandes/${demande.id}/consultation`}
+                    aria-label={`Consulter la demande du ${formatDate(demande.created_at)}`}
+                  >
+                    Consulter
+                  </Link>
+                )}
               </Td>
             </Tr>
           ))}

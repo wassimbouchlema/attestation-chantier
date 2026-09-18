@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { creerDemande, listerDemandes, recupererDemande, type StatutDemande } from "../../api/demandes";
+import { creerDemande, listerDemandes, recupererDemande, recupererFdrPdf, type StatutDemande } from "../../api/demandes";
 
 export const demandesKeys = {
   all: ["demandes"] as const,
@@ -32,5 +32,17 @@ export const useCreerDemande = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
     },
+  });
+};
+
+/**
+ * Mutation (pas une query) : le PDF n'est récupéré qu'à la demande explicite
+ * de l'utilisateur (clic Prévisualiser/Télécharger), jamais mis en cache — le
+ * `Blob` résultant est éphémère, consommé immédiatement par l'appelant
+ * (window.open ou déclenchement de téléchargement).
+ */
+export const useTelechargerFdrPdf = (demandeId: string) => {
+  return useMutation({
+    mutationFn: () => recupererFdrPdf(demandeId),
   });
 };

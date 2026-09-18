@@ -13,7 +13,7 @@ import { useFdrPiecesPage } from "./useFdrPiecesPage";
  */
 export const FdrPiecesPage = () => {
   const { demande } = useOutletContext<FdrOutletContext>();
-  const { lectureSeule, retournerAuxInformations } = useFdrPiecesPage(demande);
+  const { lectureSeule, retournerAuxInformations, continuer } = useFdrPiecesPage(demande);
 
   return (
     <>
@@ -23,6 +23,9 @@ export const FdrPiecesPage = () => {
       <div className="fdr-actions-globales">
         <Button variant="secondary" onClick={retournerAuxInformations}>
           Retour aux informations
+        </Button>
+        <Button variant="primary" onClick={continuer}>
+          Continuer
         </Button>
       </div>
     </>

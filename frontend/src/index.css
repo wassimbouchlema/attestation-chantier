@@ -167,3 +167,10 @@ body {
   gap: 1rem;
   margin-top: 2rem;
 }
+
+.af-steps-new .af-steps-list-step.on.af-steps-list-step--fdr-etape-validation-active svg:first-child {
+  display: none;
+}
+.af-steps-new .af-steps-list-step.on.af-steps-list-step--fdr-etape-validation-active .af-steps-list-step__title {
+  color: var(--steps-color-active);
+}

@@ -45,6 +45,8 @@ const demandeApi = (overrides: Partial<DemandeDetail> = {}): DemandeDetail => ({
   statut: "BROUILLON",
   created_at: "2026-09-10T08:00:00Z",
   updated_at: "2026-09-12T10:30:00Z",
+  envoye_at: null,
+  commentaire_distributeur: "",
   fdr: FDR_VIDE,
   ...overrides,
 });
@@ -59,6 +61,7 @@ const renderWizard = (chemin = `/distributeur/demandes/${ID_DEMANDE}/pieces`) =>
               <Route index element={<Navigate to="informations" replace />} />
               <Route path="informations" element={<p>Informations (page)</p>} />
               <Route path="pieces" element={<FdrPiecesPage />} />
+              <Route path="validation" element={<p>Validation & envoi (page)</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -238,6 +241,26 @@ describe("FdrPiecesPage — suppression d'une pièce", () => {
 
     await screen.findByText("Dossier incomplet");
     expect(screen.queryByText("note.pdf")).not.toBeInTheDocument();
+  });
+});
+
+describe("FdrPiecesPage — Continuer vers Validation & envoi", () => {
+  it("navigue vers le récap même si le dossier documentaire est incomplet", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi());
+    mockPieces({
+      pieces: [],
+      pieces_requises: ["complexite"],
+      pieces_manquantes: ["complexite"],
+      dossier_complet: false,
+    });
+    mockEvaluationRisque({ score: 25, niveau: "modere", synthese: "Plusieurs facteurs de vigilance." });
+    renderWizard();
+    await screen.findByText("Dossier incomplet");
+
+    await user.click(screen.getByRole("button", { name: "Continuer" }));
+
+    expect(await screen.findByText("Validation & envoi (page)")).toBeInTheDocument();
   });
 });
 
