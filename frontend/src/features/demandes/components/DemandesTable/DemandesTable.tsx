@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import type { Demande } from "../../../../api/demandes";
 import { formatDate } from "../../../../helpers/formatDate";
 import { LIBELLE_STATUT, VARIANT_STATUT } from "../../constants/statutLabel";
+import "./DemandesTable.css";
 
 export const DemandesTable = ({
   demandes,

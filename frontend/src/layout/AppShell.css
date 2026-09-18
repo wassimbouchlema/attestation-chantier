@@ -1,0 +1,26 @@
+/*
+ * Le composant User de Canopée n'a aucun espacement CSS entre le nom/rôle
+ * et son slot `children` (utilisé ici pour l'action de déconnexion) —
+ * reprend l'unité `ch` déjà utilisée en interne par User pour ce même
+ * composant (.af-info-user__profile { margin-left: .5ch }).
+ */
+.user-logout-action {
+  margin-left: 1ch;
+}
+
+/* Lien d'évitement : premier élément focusable du shell, invisible tant
+ * qu'il n'a pas le focus clavier, pour atteindre le contenu sans repasser
+ * par toute la navigation du Header à chaque page. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background-color: var(--white);
+  color: var(--axablue100);
+}
+
+.skip-link:focus {
+  left: 0;
+}

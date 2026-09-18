@@ -1,0 +1,80 @@
+/*
+ * Projet d'attestation : la barre d'outils Quill est un outil de
+ * l'application et vit AU-DESSUS de la feuille ; la feuille A4 elle-même est
+ * un document continu (gabarit fixe + zone éditable + pied de page) sans
+ * second fond blanc ni cadre Quill interne, pour qu'écran et futur PDF se
+ * lisent comme un seul document.
+ */
+.projet-attestation-barre-outils.ql-toolbar.ql-snow {
+  background: var(--gray10);
+  border: 0.0625rem solid var(--gray40);
+  margin: 0 auto;
+  max-width: 42rem;
+}
+
+.projet-attestation-feuille {
+  background: var(--white);
+  box-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.08);
+  margin: 1.5rem auto 0;
+  max-width: 42rem;
+  padding: 3rem 3.5rem;
+}
+
+/* Titres du document : portés par le gabarit (jamais par contenu_html), donc
+   ni supprimables depuis l'éditeur ni dupliqués par le contenu enregistré. */
+.projet-attestation-titres {
+  margin: 2.5rem 0 2rem;
+  text-align: center;
+}
+.projet-attestation-titres__projet {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.projet-attestation-titres__mention {
+  color: var(--orange40);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+}
+.projet-attestation-titres__objet {
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  margin-top: 2rem;
+  text-transform: uppercase;
+}
+
+.projet-attestation-pied {
+  border-top: 0.0625rem solid var(--gray40);
+  color: var(--gray60);
+  font-size: 0.8125rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+/* La zone éditable se fond dans la feuille : pas de bordure ni de fond
+   propres, seules les marges internes du document. */
+.projet-attestation-corps.ql-container.ql-snow {
+  border: none;
+  font-family: inherit;
+}
+.projet-attestation-corps .ql-editor {
+  font-size: 1rem;
+  line-height: 1.7;
+  min-height: 18rem;
+  padding: 0;
+}
+.projet-attestation-corps .ql-editor h2 {
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  margin-top: 2rem;
+  text-transform: uppercase;
+}
+.projet-attestation-corps .ql-editor blockquote {
+  border-left: 0.125rem solid var(--gray40);
+  color: var(--gray80);
+  font-style: italic;
+  padding-left: 1rem;
+}

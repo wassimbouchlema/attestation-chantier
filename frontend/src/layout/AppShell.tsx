@@ -3,6 +3,7 @@ import logoAxa from "@axa-fr/canopee-css/logo-axa.svg";
 import type { ReactNode } from "react";
 
 import type { Role } from "../api/auth";
+import "./AppShell.css";
 import { useAppShell } from "./useAppShell";
 
 const LIBELLE_ROLE: Record<Role, string> = {

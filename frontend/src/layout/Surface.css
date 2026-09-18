@@ -1,0 +1,11 @@
+/*
+ * Surface passive (voir Surface.tsx) : reprend exactement les tokens/valeurs
+ * du composant Card de distributeur (fond, ombre, radius), qui n'a pas
+ * d'équivalent passif (Card est un <button>).
+ */
+.surface {
+  background-color: var(--white);
+  border-radius: 4px;
+  box-shadow: 0 0 0.5625rem 0 rgba(0, 0, 0, 0.18);
+  padding: 1.5rem;
+}

@@ -1,4 +1,5 @@
 import "quill/dist/quill.snow.css";
+import "./EditeurProjetAttestation.css";
 
 import type { Utilisateur } from "../../../../api/auth";
 import type { DemandeDetail } from "../../../../api/demandes";

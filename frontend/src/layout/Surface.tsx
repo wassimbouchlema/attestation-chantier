@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import "./Surface.css";
+
 /**
  * Surface passive (fond blanc, ombre, coins arrondis) reprenant les tokens
  * du composant Card de Canopée. Card lui-même est un <button> (cliquable),

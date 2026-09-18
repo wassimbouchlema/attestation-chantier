@@ -1,0 +1,22 @@
+
+.login-form .af-form__group > [class*="col-md-"] {
+  flex: 0 0 100%;
+  max-width: 100%;
+}
+
+.login-form .af-form__text,
+.login-form .af-form__input-text {
+  width: 100%;
+}
+
+.login-form .af-form__group {
+  margin-bottom: 1.5rem;
+}
+
+.login-surface {
+  padding: 2.5rem 2.25rem;
+}
+
+.login-description {
+  color: var(--gray60);
+}

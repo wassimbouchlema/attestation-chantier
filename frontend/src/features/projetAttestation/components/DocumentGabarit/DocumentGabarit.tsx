@@ -3,6 +3,7 @@ import logoAxa from "@axa-fr/canopee-css/logo-axa.svg";
 import type { Utilisateur } from "../../../../api/auth";
 import type { DemandeDetail } from "../../../../api/demandes";
 import { formatDate } from "../../../../helpers/formatDate";
+import "./DocumentGabarit.css";
 
 const nomAgent = (agent: Utilisateur): string => {
   const nomComplet = `${agent.first_name} ${agent.last_name}`.trim();

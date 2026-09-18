@@ -1,5 +1,6 @@
 import { Step, Steps } from "@axa-fr/canopee-react/distributeur";
 
+import "./FdrStepper.css";
 import { useFdrStepper } from "./useFdrStepper";
 
 export const FdrStepper = () => {

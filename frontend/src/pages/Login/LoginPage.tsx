@@ -5,6 +5,7 @@ import { resolveHomePath } from "../../features/auth/roleHome";
 import { AppShell } from "../../layout/AppShell";
 import { SessionLoader } from "../../layout/SessionLoader";
 import { Surface } from "../../layout/Surface";
+import "./LoginPage.css";
 import { useLoginPage } from "./useLoginPage";
 
 export const LoginPage = () => {

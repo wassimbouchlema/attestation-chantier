@@ -3,6 +3,7 @@ import { Button, Loader, MainContainer, Message, Tag } from "@axa-fr/canopee-rea
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
+import "./ProjetAttestationPage.css";
 import { useProjetAttestationPage } from "./useProjetAttestationPage";
 
 export const ProjetAttestationPage = () => {
