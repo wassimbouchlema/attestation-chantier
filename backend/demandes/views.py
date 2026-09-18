@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
 from django.db import transaction
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
@@ -17,8 +17,19 @@ from comptes.permissions import IsDistributeur
 from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_unique
 
 from .evaluation_risque import calculer_evaluation_risque
-from .models import Demande, FormulaireRisque, Notification, PieceJustificative, StatutDemande, TypeNotification
+from .html_sanitization import nettoyer_html
+from .models import (
+    Demande,
+    FormulaireRisque,
+    Notification,
+    PieceJustificative,
+    ProjetAttestation,
+    StatutDemande,
+    TypeNotification,
+)
 from .pdf import generer_pdf_fdr
+from .projet_attestation import generer_contenu_initial
+from .projet_attestation_pdf import generer_pdf
 from .rules import calculer_pieces_manquantes, calculer_pieces_requises
 from .serializers import (
     CommentaireDistributeurSerializer,
@@ -30,6 +41,7 @@ from .serializers import (
     MarquerNotificationsVuesSerializer,
     NotificationSerializer,
     PieceJustificativeSerializer,
+    ProjetAttestationSerializer,
 )
 from .validation_envoi import valider_fdr_pret_a_envoyer
 
@@ -86,6 +98,8 @@ class DemandeViewSet(
             return EvaluationRisqueSerializer
         if self.action == "commentaire":
             return CommentaireDistributeurSerializer
+        if self.action == "projet_attestation":
+            return ProjetAttestationSerializer
         return DemandeSerializer
 
     def create(self, request, *args, **kwargs):
@@ -337,6 +351,70 @@ class DemandeViewSet(
                 "prochaine_relance_at": demande.last_relance_at + DELAI_RELANCE,
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get", "post", "patch"], url_path="projet-attestation")
+    def projet_attestation(self, request, pk=None):
+        demande = self.get_object()
+
+        if request.method == "GET":
+            projet = getattr(demande, "projet_attestation", None)
+            if projet is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(self.get_serializer(projet).data)
+
+        if request.method == "POST":
+            if demande.statut != StatutDemande.EN_COURS:
+                return Response(
+                    {
+                        "code": "PROJET_NON_AUTORISE",
+                        "detail": "Un projet d'attestation ne peut être créé que pour une demande en cours.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if getattr(demande, "projet_attestation", None) is not None:
+                return Response(
+                    {
+                        "code": "PROJET_DEJA_EXISTANT",
+                        "detail": "Un projet d'attestation existe déjà pour cette demande.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            projet = ProjetAttestation.objects.create(
+                demande=demande,
+                contenu_html=nettoyer_html(generer_contenu_initial(demande.fdr)),
+            )
+            return Response(self.get_serializer(projet).data, status=status.HTTP_201_CREATED)
+
+        # PATCH
+        projet = getattr(demande, "projet_attestation", None)
+        if projet is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if demande.statut != StatutDemande.EN_COURS:
+            return Response(
+                {"detail": "Cette demande n'est plus modifiable (statut différent de EN_COURS)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        serializer = self.get_serializer(projet, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="projet-attestation/pdf")
+    def projet_attestation_pdf(self, request, pk=None):
+        """PDF rendu à la demande, jamais stocké : `contenu_html` reste la
+        seule source de vérité. Le corps repris est celui enregistré en base
+        (déjà sanitizé), jamais un HTML transmis par le client."""
+        demande = self.get_object()
+        projet = getattr(demande, "projet_attestation", None)
+        if projet is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        pdf = generer_pdf(demande, projet.contenu_html)
+        return HttpResponse(
+            pdf,
+            content_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="projet-attestation-{demande.id}.pdf"'},
         )
 
 

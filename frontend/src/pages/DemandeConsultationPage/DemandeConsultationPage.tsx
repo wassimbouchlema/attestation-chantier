@@ -29,6 +29,13 @@ export const DemandeConsultationPage = () => {
     relanceDisabled,
     erreurRelance,
     fermerErreurRelance,
+    projet,
+    projetEnChargement,
+    creerProjet,
+    creationProjetEnCours,
+    erreurCreationProjet,
+    fermerErreurCreationProjet,
+    modifierProjet,
     retournerAuxDemandes,
   } = useDemandeConsultationPage();
 
@@ -128,6 +135,42 @@ export const DemandeConsultationPage = () => {
                   Télécharger
                 </Button>
               </Surface>
+
+              {demande.statut !== "BROUILLON" && (
+                <Surface>
+                  <Title heading="h2">Projet d'attestation</Title>
+
+                  {projetEnChargement && <Loader mode="get">{null}</Loader>}
+
+                  {!projetEnChargement && !projet && demande.statut === "EN_COURS" && (
+                    <>
+                      <p>Préparez un projet d'attestation à partir des informations du FDR.</p>
+                      {erreurCreationProjet && (
+                        <Message
+                          variant="error"
+                          title={erreurCreationProjet}
+                          onClose={fermerErreurCreationProjet}
+                          closeButtonAriaLabel="Fermer"
+                        />
+                      )}
+                      <Button variant="secondary" onClick={creerProjet} disabled={creationProjetEnCours}>
+                        {creationProjetEnCours ? "Création…" : "Créer le projet"}
+                      </Button>
+                    </>
+                  )}
+
+                  {!projetEnChargement && projet && (
+                    <>
+                      <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                        <Restitution label="Dernière modification">{formatDateHeure(projet.updated_at)}</Restitution>
+                      </div>
+                      <Button variant="secondary" onClick={modifierProjet}>
+                        Modifier le projet
+                      </Button>
+                    </>
+                  )}
+                </Surface>
+              )}
 
               <div className="fdr-actions-globales">
                 <Button variant="secondary" onClick={retournerAuxDemandes}>

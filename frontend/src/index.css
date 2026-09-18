@@ -21,6 +21,9 @@ body {
  */
 .app-shell__content {
   padding-bottom: 2rem;
+  /* Sans cet espace, le premier bloc (Message Canopée, qui n'a pas de marge
+     haute propre) vient se coller sous le bandeau bleu du PageHeader. */
+  padding-top: 2rem;
 }
 
 /*
@@ -172,6 +175,118 @@ body {
   align-items: center;
   display: flex;
   gap: 0.5rem;
+}
+
+.projet-attestation-barre-outils.ql-toolbar.ql-snow {
+  background: var(--gray10);
+  border: 0.0625rem solid var(--gray40);
+  margin: 0 auto;
+  max-width: 42rem;
+}
+
+.projet-attestation-feuille {
+  background: var(--white);
+  box-shadow: 0 0 0.5rem rgba(0, 0, 0, 0.08);
+  margin: 1.5rem auto 0;
+  max-width: 42rem;
+  padding: 3rem 3.5rem;
+}
+
+.projet-attestation-gabarit {
+  font-size: 0.875rem;
+}
+.projet-attestation-gabarit__entete {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2.5rem;
+}
+.projet-attestation-gabarit__logo {
+  height: 3.25rem;
+  width: 3.25rem;
+}
+.projet-attestation-gabarit__colonnes {
+  display: flex;
+  gap: 3rem;
+}
+.projet-attestation-gabarit__colonne {
+  flex: 1;
+}
+.projet-attestation-gabarit__label {
+  color: var(--gray60);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+.projet-attestation-gabarit__colonne .projet-attestation-gabarit__label:not(:first-child) {
+  margin-top: 1.5rem;
+}
+.projet-attestation-gabarit__objet {
+  border-bottom: 0.0625rem solid var(--gray40);
+  margin-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.projet-attestation-titres {
+  margin: 2.5rem 0 2rem;
+  text-align: center;
+}
+.projet-attestation-titres__projet {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.projet-attestation-titres__mention {
+  color: var(--orange40);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+}
+.projet-attestation-titres__objet {
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  margin-top: 2rem;
+  text-transform: uppercase;
+}
+
+.projet-attestation-etat {
+  color: var(--orange40);
+  font-weight: 700;
+  margin-top: 1.5rem;
+}
+
+.projet-attestation-pied {
+  border-top: 0.0625rem solid var(--gray40);
+  color: var(--gray60);
+  font-size: 0.8125rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+.projet-attestation-corps.ql-container.ql-snow {
+  border: none;
+  font-family: inherit;
+}
+.projet-attestation-corps .ql-editor {
+  font-size: 1rem;
+  line-height: 1.7;
+  min-height: 18rem;
+  padding: 0;
+}
+.projet-attestation-corps .ql-editor h2 {
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  margin-top: 2rem;
+  text-transform: uppercase;
+}
+.projet-attestation-corps .ql-editor blockquote {
+  border-left: 0.125rem solid var(--gray40);
+  color: var(--gray80);
+  font-style: italic;
+  padding-left: 1rem;
 }
 
 .af-steps-new .af-steps-list-step.on.af-steps-list-step--fdr-etape-validation-active svg:first-child {

@@ -138,4 +138,8 @@ export const handlers = [
     };
     return HttpResponse.json(reponse);
   }),
+
+  // Par défaut, aucun projet d'attestation n'existe encore (404 = état
+  // normal) : les tests qui en créent un le remplacent via server.use().
+  http.get("*/demandes/:id/projet-attestation/", () => new HttpResponse(null, { status: 404 })),
 ];

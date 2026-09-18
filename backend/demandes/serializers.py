@@ -3,7 +3,8 @@ from pathlib import Path
 from rest_framework import serializers
 
 from .evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
-from .models import Demande, FormulaireRisque, Notification, PieceJustificative, TypeChantier, Usage
+from .html_sanitization import nettoyer_html
+from .models import Demande, FormulaireRisque, Notification, PieceJustificative, ProjetAttestation, TypeChantier, Usage
 from .rules import TYPES_PIECES_AUTORISES
 
 EXTENSIONS_PIECES_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -175,3 +176,15 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 class MarquerNotificationsVuesSerializer(serializers.Serializer):
     ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)
+
+
+class ProjetAttestationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjetAttestation
+        fields = ["contenu_html", "created_at", "updated_at"]
+        read_only_fields = ["created_at", "updated_at"]
+
+    def validate_contenu_html(self, value):
+        # Seul point d'écriture de ce champ (PATCH) : le backend reste l'unique
+        # garde-fou, jamais une confiance dans une sanitization frontend seule.
+        return nettoyer_html(value)

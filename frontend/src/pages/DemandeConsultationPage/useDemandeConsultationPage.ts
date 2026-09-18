@@ -7,6 +7,7 @@ import { messageErreurAffichable } from "../../features/demandes/helpers/message
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { calculerProchaineRelance } from "../../features/demandes/helpers/prochaineRelance";
 import { useDemande, useRelancerDemande, useTelechargerFdrPdf } from "../../features/demandes/queries";
+import { useCreerProjetAttestation, useProjetAttestation } from "../../features/projetAttestation/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
 interface EtatNavigationConsultation {
@@ -54,6 +55,14 @@ export const useDemandeConsultationPage = () => {
     });
   };
 
+  const projetQuery = useProjetAttestation(demandeId);
+  const creerProjetMutation = useCreerProjetAttestation(demandeId);
+  const creerProjet = () => {
+    creerProjetMutation.mutate(undefined, {
+      onSuccess: () => navigate(`/distributeur/demandes/${demandeId}/projet-attestation`),
+    });
+  };
+
   const introuvable = demandeQuery.error instanceof ErreurDemandeIntrouvable;
   const demande = demandeQuery.data;
   // Anticipation d'affichage uniquement (bouton désactivé, date annoncée) :
@@ -88,6 +97,14 @@ export const useDemandeConsultationPage = () => {
         : messageErreurAffichable(relancerMutation.error)
       : null,
     fermerErreurRelance: () => relancerMutation.reset(),
+
+    projet: projetQuery.data,
+    projetEnChargement: projetQuery.isLoading,
+    creerProjet,
+    creationProjetEnCours: creerProjetMutation.isPending,
+    erreurCreationProjet: creerProjetMutation.isError ? messageErreurAffichable(creerProjetMutation.error) : null,
+    fermerErreurCreationProjet: () => creerProjetMutation.reset(),
+    modifierProjet: () => navigate(`/distributeur/demandes/${demandeId}/projet-attestation`),
 
     retournerAuxDemandes: () => navigate("/distributeur"),
   };

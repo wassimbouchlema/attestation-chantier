@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DemandeDetail, FormulaireRisqueApi } from "../../api/demandes";
 import type { EvaluationRisqueApi } from "../../api/evaluationRisque";
 import type { PiecesResponseApi } from "../../api/pieces";
+import type { ProjetAttestationApi } from "../../api/projetAttestation";
 import { AuthProvider } from "../../features/auth/AuthProvider";
 import { DemandeConsultationPage } from "../../pages/DemandeConsultationPage/DemandeConsultationPage";
 import { createQueryClient } from "../../queryClient";
@@ -77,6 +78,7 @@ const renderPage = (
                 </>
               }
             />
+            <Route path="/distributeur/demandes/:id/projet-attestation" element={<p>Éditeur du projet (page)</p>} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -93,6 +95,14 @@ const mockPieces = (reponse: PiecesResponseApi) => {
 
 const mockEvaluationRisque = (reponse: EvaluationRisqueApi) => {
   server.use(http.get("*/demandes/:id/evaluation-risque/", () => HttpResponse.json(reponse)));
+};
+
+const mockProjetAttestation = (reponse: ProjetAttestationApi | null) => {
+  server.use(
+    http.get("*/demandes/:id/projet-attestation/", () =>
+      reponse ? HttpResponse.json(reponse) : new HttpResponse(null, { status: 404 }),
+    ),
+  );
 };
 
 const PIECES_COMPLETES: PiecesResponseApi = {
@@ -345,6 +355,75 @@ describe("DemandeConsultationPage — relance", () => {
 
     await screen.findByRole("heading", { name: "Suivi de la demande" });
     expect(screen.queryByRole("button", { name: /Relancer/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("DemandeConsultationPage — projet d'attestation", () => {
+  it("EN_COURS sans projet : proposition de création", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Projet d'attestation" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Préparez un projet d'attestation à partir des informations du FDR."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Créer le projet" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Modifier le projet" })).not.toBeInTheDocument();
+  });
+
+  it("clic sur Créer le projet : POST puis navigation vers l'éditeur", async () => {
+    const user = userEvent.setup();
+    let appelsCreation = 0;
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    server.use(
+      http.post("*/demandes/:id/projet-attestation/", () => {
+        appelsCreation += 1;
+        return HttpResponse.json(
+          { contenu_html: "<h1>Projet</h1>", created_at: "2026-09-18T10:00:00Z", updated_at: "2026-09-18T10:00:00Z" },
+          { status: 201 },
+        );
+      }),
+    );
+    renderPage();
+    await screen.findByRole("button", { name: "Créer le projet" });
+
+    await user.click(screen.getByRole("button", { name: "Créer le projet" }));
+
+    expect(await screen.findByText("Éditeur du projet (page)")).toBeInTheDocument();
+    expect(appelsCreation).toBe(1);
+  });
+
+  it("projet déjà existant : proposition de modification, pas de création", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation({
+      contenu_html: "<h1>Projet</h1>",
+      created_at: "2026-09-18T09:00:00Z",
+      updated_at: "2026-09-18T10:30:00Z",
+    });
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "Modifier le projet" })).toBeInTheDocument();
+    expect(screen.getByText("Dernière modification")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Créer le projet" })).not.toBeInTheDocument();
+  });
+
+  it("statut BROUILLON : aucune section Projet d'attestation", async () => {
+    mockDemande(demandeApi({ statut: "BROUILLON" }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Récapitulatif des informations" });
+    expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument();
   });
 });
 

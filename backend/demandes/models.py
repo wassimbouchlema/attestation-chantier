@@ -201,3 +201,22 @@ class Notification(models.Model):
                 name="notification_type_valide",
             ),
         ]
+
+
+class ProjetAttestation(models.Model):
+    """Document éditable (WYSIWYG) préparé par le distributeur pour une demande
+    EN_COURS — jamais l'attestation définitive, qui reste du ressort du SIÈGE
+    (hors périmètre de ce modèle pour l'instant). Aucune donnée FDR dupliquée
+    en colonnes : `contenu_html` est le document complet, prérempli une seule
+    fois à la création puis édité librement.
+    """
+
+    demande = models.OneToOneField(
+        Demande,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="projet_attestation",
+    )
+    contenu_html = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
