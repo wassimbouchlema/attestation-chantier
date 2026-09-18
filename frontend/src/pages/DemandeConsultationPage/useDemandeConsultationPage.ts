@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import { ErreurDemandeIntrouvable } from "../../api/demandes";
+import { ErreurDelaiRelanceNonEcoule, ErreurDemandeIntrouvable } from "../../api/demandes";
+import { formatDateHeure } from "../../helpers/formatDateHeure";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
-import { useDemande, useTelechargerFdrPdf } from "../../features/demandes/queries";
+import { calculerProchaineRelance } from "../../features/demandes/helpers/prochaineRelance";
+import { useDemande, useRelancerDemande, useTelechargerFdrPdf } from "../../features/demandes/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
 interface EtatNavigationConsultation {
@@ -34,6 +36,7 @@ export const useDemandeConsultationPage = () => {
 
   const demandeQuery = useDemande(demandeId);
   const telechargerPdfMutation = useTelechargerFdrPdf(demandeId);
+  const relancerMutation = useRelancerDemande(demandeId);
 
   const previsualiser = () => {
     telechargerPdfMutation.mutate(undefined, { onSuccess: ouvrirPdfDansUnNouvelOnglet });
@@ -45,14 +48,26 @@ export const useDemandeConsultationPage = () => {
     });
   };
 
+  const relancer = () => {
+    relancerMutation.mutate(undefined, {
+      onSuccess: () => setMessageSucces("Relance envoyée au siège."),
+    });
+  };
+
   const introuvable = demandeQuery.error instanceof ErreurDemandeIntrouvable;
+  const demande = demandeQuery.data;
+  // Anticipation d'affichage uniquement (bouton désactivé, date annoncée) :
+  // le backend reste l'unique source de vérité pour l'autorisation réelle.
+  const prochaineRelance = demande?.last_relance_at ? calculerProchaineRelance(demande.last_relance_at) : null;
+  // oxlint-disable-next-line react/purity
+  const relanceEnCooldown = prochaineRelance !== null && Date.now() < prochaineRelance.getTime();
 
   return {
     isLoading: demandeQuery.isLoading,
     introuvable,
     erreurChargement: demandeQuery.isError && !introuvable ? messageErreurAffichable(demandeQuery.error) : null,
     reessayerChargement: () => demandeQuery.refetch(),
-    demande: demandeQuery.data,
+    demande,
 
     messageSucces,
     fermerMessageSucces: () => setMessageSucces(null),
@@ -62,6 +77,17 @@ export const useDemandeConsultationPage = () => {
     pdfEnCours: telechargerPdfMutation.isPending,
     erreurPdf: telechargerPdfMutation.isError ? messageErreurAffichable(telechargerPdfMutation.error) : null,
     fermerErreurPdf: () => telechargerPdfMutation.reset(),
+
+    relancer,
+    prochaineRelance,
+    relanceEnCours: relancerMutation.isPending,
+    relanceDisabled: relancerMutation.isPending || relanceEnCooldown,
+    erreurRelance: relancerMutation.isError
+      ? relancerMutation.error instanceof ErreurDelaiRelanceNonEcoule
+        ? `Une nouvelle relance sera possible le ${formatDateHeure(relancerMutation.error.prochaineRelanceAt)}.`
+        : messageErreurAffichable(relancerMutation.error)
+      : null,
+    fermerErreurRelance: () => relancerMutation.reset(),
 
     retournerAuxDemandes: () => navigate("/distributeur"),
   };

@@ -24,6 +24,7 @@ export interface Demande {
   created_at: string;
   updated_at: string;
   envoye_at: string | null;
+  last_relance_at: string | null;
 }
 
 export type TypeChantier = "" | "NEUVE" | "RENOVATION";
@@ -239,6 +240,47 @@ export const envoyerDemande = async (
       throw new ErreurFdrInvalide(corps.erreurs ?? {});
     }
     throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return lireJson<DemandeDetail>(response, messageIndisponible);
+};
+
+export class ErreurDelaiRelanceNonEcoule extends Error {
+  prochaineRelanceAt: string;
+
+  constructor(prochaineRelanceAt: string) {
+    super("Une nouvelle relance pourra être envoyée ultérieurement.");
+    this.prochaineRelanceAt = prochaineRelanceAt;
+  }
+}
+
+interface CorpsErreurRelance {
+  code?: string;
+  detail?: string;
+  prochaine_relance_at?: string;
+}
+
+/**
+ * `POST /demandes/{id}/relancer/` — aucun body. Le backend reste l'unique
+ * source de vérité pour l'autorisation (statut EN_COURS) et le délai de 24h ;
+ * le frontend n'anticipe le cooldown que pour l'affichage (bouton désactivé),
+ * jamais comme garde-fou de sécurité.
+ */
+export const relancerDemande = async (demandeId: string): Promise<DemandeDetail> => {
+  const messageIndisponible = "Impossible de relancer le siège pour cette demande.";
+  const response = await requeteAuthentifiee(`/demandes/${demandeId}/relancer/`, { method: "POST" });
+
+  if (response.status === 404) {
+    throw new ErreurDemandeIntrouvable("Cette demande est introuvable.");
+  }
+  if (response.status === 409) {
+    const corps = await lireJson<CorpsErreurRelance>(response, messageIndisponible);
+    if (corps.code === "DELAI_RELANCE_NON_ECOULE" && corps.prochaine_relance_at) {
+      throw new ErreurDelaiRelanceNonEcoule(corps.prochaine_relance_at);
+    }
+    throw new ErreurReseauOuServeur(corps.detail ?? messageIndisponible);
   }
   if (!response.ok) {
     throw new ErreurReseauOuServeur(messageIndisponible);

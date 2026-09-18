@@ -46,6 +46,7 @@ const demandeApi = (overrides: Partial<DemandeDetail> = {}): DemandeDetail => ({
   created_at: "2026-09-10T08:00:00Z",
   updated_at: "2026-09-12T10:30:00Z",
   envoye_at: null,
+  last_relance_at: null,
   commentaire_distributeur: "",
   fdr: FDR_VIDE,
   ...overrides,

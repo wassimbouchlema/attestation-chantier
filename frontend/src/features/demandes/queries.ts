@@ -5,7 +5,9 @@ import {
   listerDemandes,
   recupererDemande,
   recupererFdrPdf,
+  relancerDemande,
   supprimerDemande,
+  type DemandeDetail,
   type FormulaireRisqueApi,
   type StatutDemande,
 } from "../../api/demandes";
@@ -49,6 +51,31 @@ export const useSupprimerDemande = () => {
     mutationFn: (id: string) => supprimerDemande(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
+    },
+  });
+};
+
+/**
+ * `setQueryData` (pas seulement `invalidateQueries`) : le nouveau
+ * `last_relance_at` doit être reflété de façon synchrone dans le cache, sans
+ * attendre un aller-retour réseau — la liste est aussi invalidée car
+ * `updated_at` change côté backend.
+ */
+export const useRelancerDemande = (demandeId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => relancerDemande(demandeId),
+    onSuccess: (reponse) => {
+      queryClient.setQueryData(demandesKeys.detail(demandeId), (precedente: DemandeDetail | undefined) =>
+        precedente ? { ...precedente, last_relance_at: reponse.last_relance_at, updated_at: reponse.updated_at } : precedente,
+      );
+      queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
+    },
+    onError: () => {
+      // Le backend reste l'unique source de vérité (cooldown, statut) : un
+      // refus (ex. DELAI_RELANCE_NON_ECOULE) peut signifier que le cache local
+      // est périmé — le détail est rechargé pour refléter l'état réel.
+      queryClient.invalidateQueries({ queryKey: demandesKeys.detail(demandeId) });
     },
   });
 };

@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.core.files.base import ContentFile
+from django.core.mail import EmailMessage
 from django.db import transaction
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
@@ -32,6 +35,11 @@ from .validation_envoi import valider_fdr_pret_a_envoyer
 
 TITRE_DEMANDE_ENVOYEE = "Nouvelle demande reçue"
 MESSAGE_DEMANDE_ENVOYEE = "Une nouvelle demande d'attestation de chantier a été envoyée."
+
+TITRE_RELANCE = "Demande relancée"
+MESSAGE_RELANCE = "Le distributeur a relancé une demande en cours de traitement."
+
+DELAI_RELANCE = timedelta(hours=24)
 
 
 class DemandePagination(PageNumberPagination):
@@ -238,6 +246,98 @@ class DemandeViewSet(
                 raise
 
         return Response(DemandeDetailSerializer(demande).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="relancer")
+    def relancer(self, request, pk=None):
+        with transaction.atomic():
+            demande = get_object_or_404(
+                Demande.objects.select_for_update().filter(distributeur=request.user),
+                pk=pk,
+            )
+
+            if demande.statut != StatutDemande.EN_COURS:
+                return Response(
+                    {
+                        "code": "RELANCE_NON_AUTORISEE",
+                        "detail": "Seule une demande en cours peut être relancée.",
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            maintenant = timezone.now()
+            if demande.last_relance_at is not None:
+                prochaine_relance_at = demande.last_relance_at + DELAI_RELANCE
+                if maintenant < prochaine_relance_at:
+                    return Response(
+                        {
+                            "code": "DELAI_RELANCE_NON_ECOULE",
+                            "detail": "Une nouvelle relance pourra être envoyée ultérieurement.",
+                            "prochaine_relance_at": prochaine_relance_at,
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+            try:
+                siege = obtenir_compte_siege_unique()
+            except ErreurConfigurationSiege:
+                return Response(
+                    {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            if not siege.email:
+                return Response(
+                    {
+                        "code": "EMAIL_SIEGE_INDISPONIBLE",
+                        "detail": "Aucune adresse email n'est configurée pour le compte SIÈGE.",
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            distributeur_affiche = request.user.get_full_name() or request.user.get_username()
+            corps = (
+                "Bonjour,\n\n"
+                f"Le distributeur {distributeur_affiche} vous relance concernant "
+                f"la demande d'attestation {demande.id}, actuellement en cours de traitement.\n\n"
+                "Merci de consulter la demande dans l'application.\n\n"
+                "Cordialement,\n"
+                "Attestation de chantier"
+            )
+
+            # L'email fait foi : `last_relance_at`/la notification ne sont
+            # enregistrés que s'il a réellement été envoyé par le backend
+            # configuré (fail_silently=False) — une exception de transport
+            # annule la transaction, aucune "fausse" relance n'est persistée.
+            try:
+                EmailMessage(
+                    subject="[Attestation de chantier] Relance d'une demande en cours",
+                    body=corps,
+                    to=[siege.email],
+                ).send(fail_silently=False)
+            except Exception:
+                transaction.set_rollback(True)
+                return Response(
+                    {"detail": "Impossible d'envoyer l'email de relance au siège."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+            demande.last_relance_at = maintenant
+            demande.save(update_fields=["last_relance_at"])
+            Notification.objects.create(
+                destinataire=siege,
+                demande=demande,
+                type_notification=TypeNotification.RELANCE,
+                titre=TITRE_RELANCE,
+                message=MESSAGE_RELANCE,
+            )
+
+        return Response(
+            {
+                **DemandeDetailSerializer(demande).data,
+                "prochaine_relance_at": demande.last_relance_at + DELAI_RELANCE,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PieceJustificativeViewSet(viewsets.GenericViewSet):

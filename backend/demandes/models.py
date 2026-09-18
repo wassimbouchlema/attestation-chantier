@@ -39,6 +39,9 @@ class Demande(models.Model):
     envoye_at = models.DateTimeField(null=True, blank=True)
     fdr_pdf = models.FileField(upload_to=chemin_upload_fdr_pdf, null=True, blank=True)
 
+    # Relance (demande déjà envoyée, EN_COURS) : pas de compteur pour cette version.
+    last_relance_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["-created_at", "-id"]
         constraints = [
@@ -170,6 +173,7 @@ class PieceJustificative(models.Model):
 
 class TypeNotification(models.TextChoices):
     DEMANDE_ENVOYEE = "DEMANDE_ENVOYEE", "Demande envoyée"
+    RELANCE = "RELANCE", "Relance"
 
 
 class Notification(models.Model):

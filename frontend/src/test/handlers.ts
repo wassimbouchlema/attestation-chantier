@@ -100,6 +100,7 @@ export const handlers = [
       created_at: "2026-09-16T09:00:00Z",
       updated_at: "2026-09-16T09:00:00Z",
       envoye_at: null,
+      last_relance_at: null,
       commentaire_distributeur: "",
       fdr,
     };
@@ -114,6 +115,7 @@ export const handlers = [
       created_at: "2026-09-16T09:00:00Z",
       updated_at: "2026-09-16T09:00:00Z",
       envoye_at: null,
+      last_relance_at: null,
     };
     return HttpResponse.json(demande, { status: 201 });
   }),

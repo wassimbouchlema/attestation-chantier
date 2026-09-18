@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse, http } from "msw";
+import { HttpResponse, delay, http } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +47,7 @@ const demandeApi = (overrides: Partial<DemandeDetail> = {}): DemandeDetail => ({
   // Heure choisie loin de minuit UTC : évite qu'un fuseau horaire local
   // différent du runner de test ne fasse basculer le jour affiché.
   envoye_at: "2026-09-17T12:15:00Z",
+  last_relance_at: null,
   commentaire_distributeur: "",
   fdr: FDR_COMPLET,
   ...overrides,
@@ -129,7 +130,8 @@ describe("DemandeConsultationPage — affichage lecture seule", () => {
     renderPage();
 
     expect(await screen.findByText("En cours")).toBeInTheDocument();
-    expect(screen.getByText(/Envoyée le 17\/09\/2026/)).toBeInTheDocument();
+    expect(screen.getByText("Envoyée le")).toBeInTheDocument();
+    expect(screen.getByText(/17\/09\/2026/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Récapitulatif des informations" })).toBeInTheDocument();
     expect(screen.getByText("AXA Construction")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pièces justificatives" })).toBeInTheDocument();
@@ -257,6 +259,92 @@ describe("DemandeConsultationPage — PDF", () => {
     await user.click(screen.getByRole("button", { name: "Prévisualiser" }));
 
     expect(await screen.findByText("Aucun document n'est disponible pour cette demande.")).toBeInTheDocument();
+  });
+});
+
+describe("DemandeConsultationPage — relance", () => {
+  it("EN_COURS jamais relancée : 'Dernière relance : Aucune', bouton actif", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Suivi de la demande" })).toBeInTheDocument();
+    expect(screen.getByText("Aucune")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Relancer le siège" })).not.toBeDisabled();
+  });
+
+  it("clic Relancer : POST /relancer/, bouton désactivé pendant la mutation, succès affiche le message et met à jour le détail", async () => {
+    const user = userEvent.setup();
+    let appelsRelance = 0;
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    server.use(
+      http.post("*/demandes/:id/relancer/", async () => {
+        appelsRelance += 1;
+        await delay(50);
+        return HttpResponse.json({ ...demandeApi(), last_relance_at: "2026-09-18T15:00:00Z" });
+      }),
+    );
+    renderPage();
+    await screen.findByRole("button", { name: "Relancer le siège" });
+
+    await user.click(screen.getByRole("button", { name: "Relancer le siège" }));
+
+    expect(screen.getByRole("button", { name: "Relance en cours…" })).toBeDisabled();
+    expect(await screen.findByText("Relance envoyée au siège.")).toBeInTheDocument();
+    expect(await screen.findByText(/Dernière relance/)).toBeInTheDocument();
+    expect(appelsRelance).toBe(1);
+  });
+
+  it("last_relance_at de moins de 24h : bouton désactivé, prochaine date de relance affichée", async () => {
+    const ilYA1Heure = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    mockDemande(demandeApi({ last_relance_at: ilYA1Heure }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Suivi de la demande" });
+    expect(screen.getByRole("button", { name: "Relancer le siège" })).toBeDisabled();
+    expect(screen.getByText("Nouvelle relance possible le")).toBeInTheDocument();
+  });
+
+  it("cooldown refusé par le backend (409 DELAI_RELANCE_NON_ECOULE) : message avec la date reçue du serveur", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    server.use(
+      http.post("*/demandes/:id/relancer/", () =>
+        HttpResponse.json(
+          {
+            code: "DELAI_RELANCE_NON_ECOULE",
+            detail: "Une nouvelle relance pourra être envoyée ultérieurement.",
+            prochaine_relance_at: "2026-09-19T15:00:00Z",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderPage();
+    await screen.findByRole("button", { name: "Relancer le siège" });
+
+    await user.click(screen.getByRole("button", { name: "Relancer le siège" }));
+
+    expect(
+      await screen.findByText(/Une nouvelle relance sera possible le 19\/09\/2026/),
+    ).toBeInTheDocument();
+  });
+
+  it("statut différent de EN_COURS : aucune action Relancer", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE" }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Suivi de la demande" });
+    expect(screen.queryByRole("button", { name: /Relancer/ })).not.toBeInTheDocument();
   });
 });
 

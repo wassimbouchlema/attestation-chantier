@@ -1,4 +1,4 @@
-import { Button, Loader, MainContainer, Message, Tag, Title } from "@axa-fr/canopee-react/distributeur";
+import { Button, Loader, MainContainer, Message, Restitution, Tag, Title } from "@axa-fr/canopee-react/distributeur";
 
 import { LIBELLE_STATUT, VARIANT_STATUT } from "../../features/demandes/constants/statutLabel";
 import { RecapitulatifFdr } from "../../features/fdr/components/RecapitulatifFdr/RecapitulatifFdr";
@@ -23,6 +23,12 @@ export const DemandeConsultationPage = () => {
     pdfEnCours,
     erreurPdf,
     fermerErreurPdf,
+    relancer,
+    prochaineRelance,
+    relanceEnCours,
+    relanceDisabled,
+    erreurRelance,
+    fermerErreurRelance,
     retournerAuxDemandes,
   } = useDemandeConsultationPage();
 
@@ -66,7 +72,37 @@ export const DemandeConsultationPage = () => {
 
           {demande && (
             <>
-              {demande.envoye_at && <p>Envoyée le {formatDateHeure(demande.envoye_at)}</p>}
+              {demande.envoye_at && (
+                <Surface>
+                  <Title heading="h2">Suivi de la demande</Title>
+                  <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                    <Restitution label="Envoyée le">{formatDateHeure(demande.envoye_at)}</Restitution>
+                    <Restitution label="Dernière relance">
+                      {demande.last_relance_at ? formatDateHeure(demande.last_relance_at) : "Aucune"}
+                    </Restitution>
+                    {prochaineRelance && (
+                      <Restitution label="Nouvelle relance possible le">
+                        {formatDateHeure(prochaineRelance.toISOString())}
+                      </Restitution>
+                    )}
+                  </div>
+
+                  {erreurRelance && (
+                    <Message
+                      variant="error"
+                      title={erreurRelance}
+                      onClose={fermerErreurRelance}
+                      closeButtonAriaLabel="Fermer"
+                    />
+                  )}
+
+                  {demande.statut === "EN_COURS" && (
+                    <Button variant="secondary" onClick={relancer} disabled={relanceDisabled}>
+                      {relanceEnCours ? "Relance en cours…" : "Relancer le siège"}
+                    </Button>
+                  )}
+                </Surface>
+              )}
 
               <RecapitulatifFdr fdr={demande.fdr} />
               <SyntheseDossierPieces demandeId={demande.id} afficherTableau />
