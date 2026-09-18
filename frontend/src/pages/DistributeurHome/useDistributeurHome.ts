@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { TAILLE_PAGE, type StatutDemande } from "../../api/demandes";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { parseFiltresListe } from "../../features/demandes/helpers/parseFiltresListe";
-import { useCreerDemande, useDemandes } from "../../features/demandes/queries";
+import { useDemandes, useSupprimerDemande } from "../../features/demandes/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
 interface EtatNavigationDistributeurHome {
@@ -32,7 +32,7 @@ export const useDistributeurHome = () => {
 
   const { statut, page } = parseFiltresListe(searchParams);
   const { data, isLoading, isError, error, refetch } = useDemandes({ statut, page });
-  const creerDemandeMutation = useCreerDemande();
+  const supprimerDemandeMutation = useSupprimerDemande();
 
   const demandes = data?.results ?? [];
   const total = data?.count ?? 0;
@@ -63,12 +63,17 @@ export const useDistributeurHome = () => {
     });
   };
 
-  const creerDemande = () => {
-    if (creerDemandeMutation.isPending) {
+  const [demandeASupprimer, setDemandeASupprimer] = useState<string | null>(null);
+
+  const confirmerSuppression = () => {
+    if (!demandeASupprimer) {
       return;
     }
-    creerDemandeMutation.mutate(undefined, {
-      onSuccess: (demande) => navigate(`/distributeur/demandes/${demande.id}`),
+    supprimerDemandeMutation.mutate(demandeASupprimer, {
+      onSuccess: () => {
+        setDemandeASupprimer(null);
+        setMessageSucces("Brouillon supprimé.");
+      },
     });
   };
 
@@ -84,9 +89,19 @@ export const useDistributeurHome = () => {
     reessayerChargement: () => refetch(),
     changerStatut,
     changerPage,
-    creerDemande,
-    creationEnCours: creerDemandeMutation.isPending,
-    erreurCreation: creerDemandeMutation.isError ? messageErreurAffichable(creerDemandeMutation.error) : null,
-    fermerErreurCreation: () => creerDemandeMutation.reset(),
+    creerDemande: () => navigate("/distributeur/demandes/nouvelle"),
+
+    demandeASupprimer,
+    ouvrirSuppression: (id: string) => setDemandeASupprimer(id),
+    annulerSuppression: () => {
+      setDemandeASupprimer(null);
+      supprimerDemandeMutation.reset();
+    },
+    confirmerSuppression,
+    suppressionEnCours: supprimerDemandeMutation.isPending,
+    erreurSuppression: supprimerDemandeMutation.isError
+      ? messageErreurAffichable(supprimerDemandeMutation.error)
+      : null,
+    fermerErreurSuppression: () => supprimerDemandeMutation.reset(),
   };
 };

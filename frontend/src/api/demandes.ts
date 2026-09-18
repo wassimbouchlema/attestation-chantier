@@ -129,18 +129,44 @@ export const recupererDemande = async (id: string, signal?: AbortSignal): Promis
   return lireJson<DemandeDetail>(response, messageIndisponible);
 };
 
-export const creerDemande = async (signal?: AbortSignal): Promise<Demande> => {
+/**
+ * Création atomique de la demande + son FDR (`POST /demandes/`, body
+ * `{"fdr": {...}}`) : le brouillon n'existe qu'une fois les informations
+ * confirmées valides, jamais avant (pas de brouillon vide créé au clic
+ * "Nouvelle demande").
+ */
+export const creerDemandeAvecFdr = async (fdr: FormulaireRisqueApi): Promise<DemandeDetail> => {
   const messageIndisponible = "Impossible de créer la demande.";
   const response = await requeteAuthentifiee("/demandes/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-    signal,
+    body: JSON.stringify({ fdr }),
   });
+  if (response.status === 400) {
+    const corps = await lireJson<{ code?: string; erreurs?: Record<string, string> }>(response, messageIndisponible);
+    if (corps.code === "FDR_INVALIDE") {
+      throw new ErreurFdrInvalide(corps.erreurs ?? {});
+    }
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
   if (!response.ok) {
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
-  return lireJson<Demande>(response, messageIndisponible);
+  return lireJson<DemandeDetail>(response, messageIndisponible);
+};
+
+export const supprimerDemande = async (id: string): Promise<void> => {
+  const messageIndisponible = "Impossible de supprimer ce brouillon.";
+  const response = await requeteAuthentifiee(`/demandes/${id}/`, { method: "DELETE" });
+  if (response.status === 404) {
+    throw new ErreurDemandeIntrouvable("Cette demande est introuvable.");
+  }
+  if (response.status === 409) {
+    throw new ErreurDemandeNonModifiable("Cette demande n'est plus modifiable (statut différent de BROUILLON).");
+  }
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
 };
 
 /** Sauvegarde technique du FDR (`PATCH /demandes/{id}/fdr/`) : ne change pas le statut, ne déclenche aucun calcul métier. */

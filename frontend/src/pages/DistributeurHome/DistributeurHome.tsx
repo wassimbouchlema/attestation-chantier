@@ -3,6 +3,7 @@ import assignmentIcon from "@material-symbols/svg-400/outlined/assignment.svg";
 
 import { DemandesFilter } from "../../features/demandes/components/DemandesFilter/DemandesFilter";
 import { DemandesTable } from "../../features/demandes/components/DemandesTable/DemandesTable";
+import { SupprimerBrouillonModal } from "../../features/demandes/components/SupprimerBrouillonModal/SupprimerBrouillonModal";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
 import { useDistributeurHome } from "./useDistributeurHome";
@@ -21,9 +22,13 @@ export const DistributeurHome = () => {
     changerStatut,
     changerPage,
     creerDemande,
-    creationEnCours,
-    erreurCreation,
-    fermerErreurCreation,
+    demandeASupprimer,
+    ouvrirSuppression,
+    annulerSuppression,
+    confirmerSuppression,
+    suppressionEnCours,
+    erreurSuppression,
+    fermerErreurSuppression,
   } = useDistributeurHome();
 
   return (
@@ -32,18 +37,13 @@ export const DistributeurHome = () => {
         title="Mes demandes"
         subtitle="Suivez et gérez vos demandes d'attestation de chantier."
         actions={
-          <Button variant="primary" onClick={creerDemande} disabled={creationEnCours}>
-            {creationEnCours ? "Création…" : "Nouvelle demande"}
+          <Button variant="primary" onClick={creerDemande}>
+            Nouvelle demande
           </Button>
         }
       />
       <MainContainer>
         <div className="container-fluid app-shell__content">
-          {creationEnCours && (
-            <p role="status" className="sr-only">
-              Création de la demande en cours…
-            </p>
-          )}
           {messageSucces && (
             <Message
               variant="success"
@@ -52,11 +52,11 @@ export const DistributeurHome = () => {
               closeButtonAriaLabel="Fermer"
             />
           )}
-          {erreurCreation && (
+          {erreurSuppression && (
             <Message
-              title={erreurCreation}
+              title={erreurSuppression}
               variant="error"
-              onClose={fermerErreurCreation}
+              onClose={fermerErreurSuppression}
               closeButtonAriaLabel="Fermer"
             />
           )}
@@ -95,10 +95,23 @@ export const DistributeurHome = () => {
           )}
 
           {!isLoading && !erreurChargement && demandes.length > 0 && (
-            <DemandesTable demandes={demandes} page={page} nombreDePages={nombreDePages} onPageChange={changerPage} />
+            <DemandesTable
+              demandes={demandes}
+              page={page}
+              nombreDePages={nombreDePages}
+              onPageChange={changerPage}
+              onSupprimer={ouvrirSuppression}
+            />
           )}
         </div>
       </MainContainer>
+
+      <SupprimerBrouillonModal
+        ouvert={demandeASupprimer !== null}
+        onConfirmer={confirmerSuppression}
+        onAnnuler={annulerSuppression}
+        suppressionEnCours={suppressionEnCours}
+      />
     </>
   );
 };

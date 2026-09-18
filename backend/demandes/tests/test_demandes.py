@@ -1,15 +1,51 @@
+import shutil
+import tempfile
 import uuid
+from pathlib import Path
 
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
 
-from ..models import Demande, StatutDemande
+from ..models import Demande, FormulaireRisque, PieceJustificative, StatutDemande, TypeChantier, TypeIntervention, Usage
+from ..rules import PIECE_COMPLEXITE
+
+
+def _fichier_upload(nom="piece.pdf", content_type="application/pdf", contenu=b"%PDF-1.4 contenu factice"):
+    return SimpleUploadedFile(nom, contenu, content_type=content_type)
+
+
+def _payload_fdr_valide(**overrides):
+    """FDR JSON entièrement valide pour `POST /demandes/` — mêmes valeurs de
+    référence que `_valeurs_fdr_complet` (test_envoi.py), en JSON natif
+    (dates/décimaux en chaînes) puisqu'envoyé via `format="json"`."""
+    valeurs = dict(
+        assure_nom="AXA Construction",
+        assure_ville="Paris",
+        assure_numero_contrat="123456789",
+        chantier_nom="Tour Horizon",
+        chantier_ville="Lyon",
+        type_chantier=TypeChantier.NEUVE,
+        chantier_atypique=False,
+        usage=Usage.BUREAU,
+        date_debut="2026-01-10",
+        date_fin="2026-06-30",
+        montant_total="100000.00",
+        intervention_description="Rénovation complète",
+        intervention_montant_prestation="50000.00",
+        intervention_type=TypeIntervention.PRINCIPALE,
+        activite_couverte=True,
+        travaux_standards=True,
+    )
+    valeurs.update(overrides)
+    return valeurs
 
 
 class DemandeModeleTests(TestCase):
@@ -64,11 +100,13 @@ class DemandeEndpointTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {response.data['access']}"
         )
 
-    def test_distributeur_cree_un_brouillon_dont_il_est_proprietaire(self):
+    def test_distributeur_cree_un_brouillon_avec_fdr_complet(self):
         self._authentifier(self.distributeur_a)
         nombre_avant = Demande.objects.count()
 
-        response = self.client.post(reverse("demande-list"), {}, format="json")
+        response = self.client.post(
+            reverse("demande-list"), {"fdr": _payload_fdr_valide()}, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Demande.objects.count(), nombre_avant + 1)
@@ -79,15 +117,21 @@ class DemandeEndpointTests(APITestCase):
         self.assertEqual(demande.statut, StatutDemande.BROUILLON)
         self.assertEqual(response.data["distributeur"], self.distributeur_a.pk)
         self.assertEqual(response.data["statut"], StatutDemande.BROUILLON)
+        self.assertEqual(response.data["fdr"]["assure_nom"], "AXA Construction")
+        self.assertEqual(demande.fdr.assure_nom, "AXA Construction")
         self.assertIsNotNone(demande.created_at)
         self.assertIsNotNone(demande.updated_at)
 
     def test_payload_ne_peut_imposer_proprietaire_ni_statut(self):
         self._authentifier(self.distributeur_a)
         payloads = [
-            {"distributeur": self.distributeur_b.pk},
-            {"statut": StatutDemande.EN_COURS},
-            {"distributeur": self.siege.pk, "statut": StatutDemande.TRAITE},
+            {"fdr": _payload_fdr_valide(), "distributeur": self.distributeur_b.pk},
+            {"fdr": _payload_fdr_valide(), "statut": StatutDemande.EN_COURS},
+            {
+                "fdr": _payload_fdr_valide(),
+                "distributeur": self.siege.pk,
+                "statut": StatutDemande.TRAITE,
+            },
         ]
 
         for payload in payloads:
@@ -104,6 +148,63 @@ class DemandeEndpointTests(APITestCase):
                     response.data["distributeur"], self.distributeur_a.pk
                 )
                 self.assertEqual(response.data["statut"], StatutDemande.BROUILLON)
+
+    def test_creation_sans_fdr_refuse_400_sans_rien_creer(self):
+        self._authentifier(self.distributeur_a)
+        nombre_demandes_avant = Demande.objects.count()
+        nombre_fdr_avant = FormulaireRisque.objects.count()
+
+        response = self.client.post(reverse("demande-list"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "FDR_INVALIDE")
+        self.assertIn("assure_nom", response.data["erreurs"])
+        self.assertEqual(Demande.objects.count(), nombre_demandes_avant)
+        self.assertEqual(FormulaireRisque.objects.count(), nombre_fdr_avant)
+
+    def test_creation_avec_fdr_incomplet_refuse_400_sans_rien_creer(self):
+        self._authentifier(self.distributeur_a)
+        nombre_demandes_avant = Demande.objects.count()
+        nombre_fdr_avant = FormulaireRisque.objects.count()
+        payload = _payload_fdr_valide()
+        del payload["assure_nom"]
+
+        response = self.client.post(
+            reverse("demande-list"), {"fdr": payload}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "FDR_INVALIDE")
+        self.assertIn("assure_nom", response.data["erreurs"])
+        self.assertEqual(Demande.objects.count(), nombre_demandes_avant)
+        self.assertEqual(FormulaireRisque.objects.count(), nombre_fdr_avant)
+
+    def test_creation_avec_incoherence_croisee_refuse_400_sans_rien_creer(self):
+        self._authentifier(self.distributeur_a)
+        nombre_demandes_avant = Demande.objects.count()
+        payload = _payload_fdr_valide(
+            montant_total="1000.00", intervention_montant_prestation="1000.00"
+        )
+
+        response = self.client.post(
+            reverse("demande-list"), {"fdr": payload}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "FDR_INVALIDE")
+        self.assertIn("intervention_montant_prestation", response.data["erreurs"])
+        self.assertEqual(Demande.objects.count(), nombre_demandes_avant)
+
+    def test_creation_ne_requiert_aucune_piece_justificative(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.post(
+            reverse("demande-list"),
+            {"fdr": _payload_fdr_valide(chantier_atypique=True)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_liste_limitee_aux_demandes_du_distributeur_connecte(self):
         autre_demande_a = Demande.objects.create(
@@ -322,11 +423,11 @@ class DemandeEndpointTests(APITestCase):
 
         self.assertEqual(Demande.objects.count(), nombre_avant)
 
-    def test_modification_et_suppression_non_exposees(self):
+    def test_modification_non_exposee(self):
         self._authentifier(self.distributeur_a)
         url = reverse("demande-detail", kwargs={"pk": self.demande_a.pk})
 
-        for methode in ("patch", "put", "delete"):
+        for methode in ("patch", "put"):
             with self.subTest(methode=methode):
                 response = getattr(self.client, methode)(
                     url, {"statut": StatutDemande.TRAITE}, format="json"
@@ -338,3 +439,118 @@ class DemandeEndpointTests(APITestCase):
         self.demande_a.refresh_from_db()
         self.assertEqual(self.demande_a.statut, StatutDemande.BROUILLON)
         self.assertEqual(self.demande_a.distributeur, self.distributeur_a)
+
+
+class DemandeSuppressionEndpointTests(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root_tmp = tempfile.mkdtemp(prefix="suppression_tests_")
+        cls._override_media_root = override_settings(MEDIA_ROOT=cls._media_root_tmp)
+        cls._override_media_root.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override_media_root.disable()
+        shutil.rmtree(cls._media_root_tmp, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.distributeur_a = Utilisateur.objects.create_user(
+            username="distributeur_suppr_a", password="test1234", role=Role.DISTRIBUTEUR
+        )
+        self.distributeur_b = Utilisateur.objects.create_user(
+            username="distributeur_suppr_b", password="test1234", role=Role.DISTRIBUTEUR
+        )
+        self.siege = Utilisateur.objects.create_user(
+            username="siege_suppr", password="test1234", role=Role.SIEGE
+        )
+
+    def _authentifier(self, utilisateur):
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": utilisateur.username, "password": "test1234"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+
+    def _url(self, demande):
+        return reverse("demande-detail", kwargs={"pk": demande.pk})
+
+    def test_suppression_brouillon_proprietaire_retourne_204_et_supprime_tout(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a)
+        fdr = FormulaireRisque.objects.create(demande=demande)
+        piece = PieceJustificative.objects.create(
+            demande=demande,
+            type_piece=PIECE_COMPLEXITE,
+            fichier=_fichier_upload(),
+            nom_fichier_original="piece.pdf",
+        )
+        chemin_fichier = piece.fichier.path
+        self.assertTrue(piece.fichier.storage.exists(piece.fichier.name))
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Demande.objects.filter(pk=demande.pk).exists())
+        self.assertFalse(FormulaireRisque.objects.filter(pk=fdr.pk).exists())
+        self.assertFalse(PieceJustificative.objects.filter(pk=piece.pk).exists())
+        self.assertFalse(Path(chemin_fichier).exists())
+
+    def test_suppression_nettoie_un_fdr_pdf_anormalement_present_sur_un_brouillon(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a)
+        FormulaireRisque.objects.create(demande=demande)
+        demande.fdr_pdf.save("brouillon.pdf", ContentFile(b"%PDF-1.4 contenu"), save=True)
+        chemin_pdf = demande.fdr_pdf.path
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Path(chemin_pdf).exists())
+
+    def test_suppression_en_cours_refuse_409(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Demande.objects.filter(pk=demande.pk).exists())
+
+    def test_suppression_traite_refuse_409(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.TRAITE)
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Demande.objects.filter(pk=demande.pk).exists())
+
+    def test_suppression_autre_distributeur_retourne_404(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_b)
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(Demande.objects.filter(pk=demande.pk).exists())
+
+    def test_suppression_siege_retourne_403(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a)
+        self._authentifier(self.siege)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Demande.objects.filter(pk=demande.pk).exists())
+
+    def test_suppression_anonyme_retourne_401(self):
+        demande = Demande.objects.create(distributeur=self.distributeur_a)
+
+        response = self.client.delete(self._url(demande))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(Demande.objects.filter(pk=demande.pk).exists())

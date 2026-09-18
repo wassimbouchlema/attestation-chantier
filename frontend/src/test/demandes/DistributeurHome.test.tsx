@@ -23,6 +23,8 @@ const ConsultationStub = () => {
   return <p>Consultation de la demande {id}</p>;
 };
 
+const NouvelleDemandeStub = () => <p>Formulaire nouvelle demande (page)</p>;
+
 const renderPage = (chemin = "/distributeur") =>
   render(
     <AuthProvider>
@@ -30,6 +32,7 @@ const renderPage = (chemin = "/distributeur") =>
         <MemoryRouter initialEntries={[chemin]}>
           <Routes>
             <Route path="/distributeur" element={<DistributeurHome />} />
+            <Route path="/distributeur/demandes/nouvelle" element={<NouvelleDemandeStub />} />
             <Route path="/distributeur/demandes/:id" element={<DemandeDetailStub />} />
             <Route path="/distributeur/demandes/:id/consultation" element={<ConsultationStub />} />
           </Routes>
@@ -185,50 +188,21 @@ describe("DistributeurHome — obsolescence des réponses (AbortController)", ()
   });
 });
 
-describe("DistributeurHome — création d'une demande", () => {
-  it("crée la demande puis navigue directement vers son détail", async () => {
+describe("DistributeurHome — Nouvelle demande", () => {
+  it("navigue vers le formulaire de création sans appeler l'API", async () => {
     const user = userEvent.setup();
-    server.use(http.post("*/demandes/", () => HttpResponse.json(creerDemande({ id: "nouvelle-demande" }), { status: 201 })));
+    let appelsPost = 0;
+    server.use(http.post("*/demandes/", () => {
+      appelsPost += 1;
+      return HttpResponse.json(creerDemande(), { status: 201 });
+    }));
     renderPage();
     await screen.findByText("Aucune demande pour le moment.");
 
     await user.click(screen.getByRole("button", { name: "Nouvelle demande" }));
 
-    expect(await screen.findByText("Détail de la demande nouvelle-demande")).toBeInTheDocument();
-  });
-
-  it("désactive le bouton pendant la création et n'envoie qu'une seule requête au double clic", async () => {
-    const user = userEvent.setup();
-    let appelsCreation = 0;
-    server.use(
-      http.post("*/demandes/", async () => {
-        appelsCreation += 1;
-        await delay(100);
-        return HttpResponse.json(creerDemande(), { status: 201 });
-      }),
-    );
-    renderPage();
-    await screen.findByText("Aucune demande pour le moment.");
-
-    const bouton = screen.getByRole("button", { name: "Nouvelle demande" });
-    await user.click(bouton);
-    await user.click(bouton);
-
-    await screen.findByText(/Détail de la demande/);
-    expect(appelsCreation).toBe(1);
-  });
-
-  it("affiche une erreur de création sans naviguer, et réactive le bouton", async () => {
-    const user = userEvent.setup();
-    server.use(http.post("*/demandes/", () => new HttpResponse(null, { status: 500 })));
-    renderPage();
-    await screen.findByText("Aucune demande pour le moment.");
-
-    await user.click(screen.getByRole("button", { name: "Nouvelle demande" }));
-
-    expect(await screen.findByText("Impossible de créer la demande.")).toBeInTheDocument();
-    expect(screen.getByText("Aucune demande pour le moment.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Nouvelle demande" })).not.toBeDisabled();
+    expect(await screen.findByText("Formulaire nouvelle demande (page)")).toBeInTheDocument();
+    expect(appelsPost).toBe(0);
   });
 });
 
@@ -268,7 +242,7 @@ describe("DistributeurHome — message de succès (état de navigation)", () => 
   });
 });
 
-describe("DistributeurHome — action par statut (Modifier / Consulter)", () => {
+describe("DistributeurHome — action par statut (Modifier / Consulter / Supprimer)", () => {
   it("BROUILLON : le lien Modifier ouvre le wizard", async () => {
     const user = userEvent.setup();
     server.use(
@@ -282,6 +256,15 @@ describe("DistributeurHome — action par statut (Modifier / Consulter)", () => 
     expect(await screen.findByText(/Détail de la demande/)).toBeInTheDocument();
   });
 
+  it("BROUILLON : affiche aussi un bouton Supprimer", async () => {
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "BROUILLON" })]))),
+    );
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /Supprimer/ })).toBeInTheDocument();
+  });
+
   it("EN_COURS : le lien Consulter ouvre la consultation en lecture seule", async () => {
     const user = userEvent.setup();
     server.use(
@@ -293,5 +276,91 @@ describe("DistributeurHome — action par statut (Modifier / Consulter)", () => 
     await user.click(screen.getByRole("link", { name: /Consulter/ }));
 
     expect(await screen.findByText(/Consultation de la demande/)).toBeInTheDocument();
+  });
+
+  it("EN_COURS : aucun bouton Supprimer", async () => {
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "EN_COURS" })]))),
+    );
+    renderPage();
+    await screen.findByRole("cell", { name: "En cours" });
+
+    expect(screen.queryByRole("button", { name: /Supprimer/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("DistributeurHome — suppression d'un brouillon", () => {
+  it("Supprimer ouvre une modale de confirmation", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "BROUILLON" })]))),
+    );
+    renderPage();
+    await screen.findByRole("button", { name: /Supprimer/ });
+
+    await user.click(screen.getByRole("button", { name: /Supprimer/ }));
+
+    expect(await screen.findByRole("dialog", { name: "Supprimer ce brouillon ?" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Cette action supprimera définitivement la demande et les pièces justificatives déjà ajoutées."),
+    ).toBeInTheDocument();
+  });
+
+  it("Annuler ferme la modale sans envoyer de requête DELETE", async () => {
+    const user = userEvent.setup();
+    let appelsDelete = 0;
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "BROUILLON" })]))),
+      http.delete("*/demandes/:id/", () => {
+        appelsDelete += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /Supprimer/ }));
+    await screen.findByRole("dialog", { name: "Supprimer ce brouillon ?" });
+
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+
+    expect(screen.queryByRole("dialog", { name: "Supprimer ce brouillon ?" })).not.toBeInTheDocument();
+    expect(appelsDelete).toBe(0);
+  });
+
+  it("Confirmer supprime, ferme la modale, met à jour la liste et affiche 'Brouillon supprimé.'", async () => {
+    const user = userEvent.setup();
+    let demandeSupprimee = false;
+    server.use(
+      http.get("*/demandes/", () =>
+        HttpResponse.json(paginer(demandeSupprimee ? [] : [creerDemande({ statut: "BROUILLON" })])),
+      ),
+      http.delete("*/demandes/:id/", () => {
+        demandeSupprimee = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /Supprimer/ }));
+    await screen.findByRole("dialog", { name: "Supprimer ce brouillon ?" });
+
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    expect(await screen.findByText("Brouillon supprimé.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Supprimer ce brouillon ?" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Aucune demande pour le moment.")).toBeInTheDocument();
+  });
+
+  it("affiche un message d'erreur si la suppression échoue", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/demandes/", () => HttpResponse.json(paginer([creerDemande({ statut: "BROUILLON" })]))),
+      http.delete("*/demandes/:id/", () => new HttpResponse(null, { status: 500 })),
+    );
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: /Supprimer/ }));
+    await screen.findByRole("dialog", { name: "Supprimer ce brouillon ?" });
+
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    expect(await screen.findByText("Impossible de supprimer ce brouillon.")).toBeInTheDocument();
   });
 });

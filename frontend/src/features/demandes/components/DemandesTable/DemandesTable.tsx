@@ -1,4 +1,4 @@
-import { Pager, Table, TBody, Td, Th, THead, Tag, Tr } from "@axa-fr/canopee-react/distributeur";
+import { Button, Pager, Table, TBody, Td, Th, THead, Tag, Tr } from "@axa-fr/canopee-react/distributeur";
 import { Link } from "react-router-dom";
 
 import type { Demande } from "../../../../api/demandes";
@@ -10,11 +10,13 @@ export const DemandesTable = ({
   page,
   nombreDePages,
   onPageChange,
+  onSupprimer,
 }: {
   demandes: Demande[];
   page: number;
   nombreDePages: number;
   onPageChange: (page: number) => void;
+  onSupprimer: (id: string) => void;
 }) => {
   return (
     <>
@@ -24,9 +26,7 @@ export const DemandesTable = ({
             <Th scope="col">Statut</Th>
             <Th scope="col">Date de création</Th>
             <Th scope="col">Dernière modification</Th>
-            <Th scope="col">
-              <span className="sr-only">Action</span>
-            </Th>
+            <Th scope="col">Actions</Th>
           </Tr>
         </THead>
         <TBody>
@@ -39,12 +39,22 @@ export const DemandesTable = ({
               <Td>{formatDate(demande.updated_at)}</Td>
               <Td>
                 {demande.statut === "BROUILLON" ? (
-                  <Link
-                    to={`/distributeur/demandes/${demande.id}`}
-                    aria-label={`Modifier la demande du ${formatDate(demande.created_at)}`}
-                  >
-                    Modifier
-                  </Link>
+                  <div className="demandes-table__actions">
+                    <Link
+                      to={`/distributeur/demandes/${demande.id}`}
+                      aria-label={`Modifier la demande du ${formatDate(demande.created_at)}`}
+                    >
+                      Modifier
+                    </Link>
+                    <span aria-hidden="true">|</span>
+                    <Button
+                      variant="ghost"
+                      aria-label={`Supprimer la demande du ${formatDate(demande.created_at)}`}
+                      onClick={() => onSupprimer(demande.id)}
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
                 ) : (
                   <Link
                     to={`/distributeur/demandes/${demande.id}/consultation`}

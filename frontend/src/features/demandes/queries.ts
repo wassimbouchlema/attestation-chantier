@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { creerDemande, listerDemandes, recupererDemande, recupererFdrPdf, type StatutDemande } from "../../api/demandes";
+import {
+  creerDemandeAvecFdr,
+  listerDemandes,
+  recupererDemande,
+  recupererFdrPdf,
+  supprimerDemande,
+  type FormulaireRisqueApi,
+  type StatutDemande,
+} from "../../api/demandes";
 
 export const demandesKeys = {
   all: ["demandes"] as const,
@@ -25,10 +33,20 @@ export const useDemande = (id: string | undefined) => {
   });
 };
 
-export const useCreerDemande = () => {
+export const useCreerDemandeAvecFdr = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => creerDemande(),
+    mutationFn: (fdr: FormulaireRisqueApi) => creerDemandeAvecFdr(fdr),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
+    },
+  });
+};
+
+export const useSupprimerDemande = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => supprimerDemande(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: demandesKeys.listes() });
     },

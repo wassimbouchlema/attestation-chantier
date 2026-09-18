@@ -42,6 +42,7 @@ class DemandeViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsDistributeur]
@@ -79,13 +80,44 @@ class DemandeViewSet(
             return CommentaireDistributeurSerializer
         return DemandeSerializer
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        fdr_payload = request.data.get("fdr")
+        fdr_serializer = FormulaireRisqueSerializer(data=fdr_payload if isinstance(fdr_payload, dict) else {})
+        if not fdr_serializer.is_valid():
+            erreurs = {
+                champ: " ".join(str(message) for message in messages)
+                for champ, messages in fdr_serializer.errors.items()
+            }
+            return Response({"code": "FDR_INVALIDE", "erreurs": erreurs}, status=status.HTTP_400_BAD_REQUEST)
+
         with transaction.atomic():
-            demande = serializer.save(
-                distributeur=self.request.user,
-                statut=StatutDemande.BROUILLON,
+            demande = Demande.objects.create(distributeur=request.user, statut=StatutDemande.BROUILLON)
+            fdr = FormulaireRisque.objects.create(demande=demande, **fdr_serializer.validated_data)
+
+            erreurs_completude = valider_fdr_pret_a_envoyer(fdr)
+            if erreurs_completude:
+                transaction.set_rollback(True)
+                return Response(
+                    {"code": "FDR_INVALIDE", "erreurs": erreurs_completude}, status=status.HTTP_400_BAD_REQUEST
+                )
+
+        return Response(DemandeDetailSerializer(demande).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        demande = self.get_object()
+        if demande.statut != StatutDemande.BROUILLON:
+            return Response(
+                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
+                status=status.HTTP_409_CONFLICT,
             )
-            FormulaireRisque.objects.create(demande=demande)
+
+        for piece in demande.pieces.all():
+            piece.fichier.delete(save=False)
+        if demande.fdr_pdf:
+            demande.fdr_pdf.delete(save=False)
+
+        demande.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["get", "patch"], url_path="fdr")
     def fdr(self, request, pk=None):

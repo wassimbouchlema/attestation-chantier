@@ -168,6 +168,12 @@ body {
   margin-top: 2rem;
 }
 
+.demandes-table__actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
 .af-steps-new .af-steps-list-step.on.af-steps-list-step--fdr-etape-validation-active svg:first-child {
   display: none;
 }

@@ -21,27 +21,6 @@ from ..rules import (
 )
 
 
-class FormulaireRisqueAutoCreationTests(APITestCase):
-    def test_creer_une_demande_cree_automatiquement_son_fdr_vide(self):
-        distributeur = Utilisateur.objects.create_user(
-            username="distributeur_auto_fdr", password="test1234", role=Role.DISTRIBUTEUR
-        )
-        token_response = self.client.post(
-            reverse("token_obtain_pair"),
-            {"username": distributeur.username, "password": "test1234"},
-            format="json",
-        )
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token_response.data['access']}")
-
-        response = self.client.post(reverse("demande-list"), {}, format="json")
-
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        demande = Demande.objects.get(pk=response.data["id"])
-        self.assertTrue(FormulaireRisque.objects.filter(pk=demande.pk).exists())
-        self.assertEqual(demande.fdr.assure_nom, "")
-        self.assertIsNone(demande.fdr.chantier_atypique)
-
-
 class FormulaireRisqueModeleTests(TestCase):
     def test_suppression_de_la_demande_supprime_le_fdr_en_cascade(self):
         distributeur = Utilisateur.objects.create_user(
@@ -171,6 +150,41 @@ class FormulaireRisqueEndpointTests(APITestCase):
             with self.subTest(champ=champ):
                 response = self.client.patch(self._url_fdr(self.demande_a), {champ: "-1"}, format="json")
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_montant_depassant_lancienne_limite_de_10_chiffres_est_accepte(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.patch(
+            self._url_fdr(self.demande_a), {"montant_total": "10420111000.00"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["montant_total"], "10420111000.00")
+
+    def test_montant_prestation_de_grande_capacite_accepte_si_inferieur_au_total(self):
+        self._authentifier(self.distributeur_a)
+        self.client.patch(self._url_fdr(self.demande_a), {"montant_total": "10420111000.00"}, format="json")
+
+        response = self.client.patch(
+            self._url_fdr(self.demande_a),
+            {"intervention_montant_prestation": "10420110999.99"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["intervention_montant_prestation"], "10420110999.99")
+
+    def test_montant_prestation_de_grande_capacite_superieur_ou_egal_au_total_reste_rejete(self):
+        self._authentifier(self.distributeur_a)
+        self.client.patch(self._url_fdr(self.demande_a), {"montant_total": "10420111000.00"}, format="json")
+
+        response = self.client.patch(
+            self._url_fdr(self.demande_a),
+            {"intervention_montant_prestation": "10420111000.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_enum_invalide_rejete_pour_chaque_champ_choix(self):
         self._authentifier(self.distributeur_a)
