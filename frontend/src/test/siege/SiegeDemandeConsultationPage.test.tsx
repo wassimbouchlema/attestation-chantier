@@ -284,7 +284,7 @@ describe("SiegeDemandeConsultationPage — traitement", () => {
     expect(screen.queryByRole("heading", { name: "Compléments demandés" })).not.toBeInTheDocument();
   });
 
-  it("valide le message puis envoie le complément, reste sur le détail et masque les actions", async () => {
+  it("valide le message puis envoie le complément, reste sur le détail et conserve le refus", async () => {
     const user = userEvent.setup();
     const poster = vi.fn(async ({ request }: { request: Request }) => {
       expect(await request.json()).toEqual({ message: complement.message });
@@ -307,18 +307,18 @@ describe("SiegeDemandeConsultationPage — traitement", () => {
     expect(screen.getByText(complement.message)).toBeInTheDocument();
     expect(screen.getByText(/Demandés le 19\/09\/2026/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Refuser" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Demander des compléments" })).not.toBeInTheDocument();
     expect(screen.getByText("En cours")).toBeInTheDocument();
     expect(poster).toHaveBeenCalledTimes(1);
   });
 
-  it("affiche un complément déjà actif au chargement sans actions", async () => {
+  it("affiche un complément déjà actif, masque une deuxième demande et conserve le refus", async () => {
     mockDemande(demandeApi({ complement_actif: complement }));
     renderPage();
     expect(await screen.findByText(complement.message)).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Refuser" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Demander des compléments" })).not.toBeInTheDocument();
   });
 
@@ -352,19 +352,16 @@ describe("SiegeDemandeConsultationPage — traitement", () => {
     expect(screen.queryByText("Demande refusée.")).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["Demander des compléments", "demander-complements", "Envoyer la demande de compléments"],
-    ["Refuser", "refuser", "Confirmer le refus"],
-  ])("affiche proprement le conflit 409 pour %s", async (bouton, action, confirmation) => {
+  it("affiche proprement le conflit 409 d'une deuxième demande de compléments simultanée", async () => {
     const user = userEvent.setup();
     const detail = "Des compléments sont déjà demandés. Attendez la réponse du distributeur.";
-    server.use(http.post(`*/siege/demandes/:id/${action}/`, () => HttpResponse.json(
+    server.use(http.post("*/siege/demandes/:id/demander-complements/", () => HttpResponse.json(
       { code: "COMPLEMENTS_DEJA_DEMANDES", detail }, { status: 409 },
     )));
     renderPage();
-    await user.click(await screen.findByRole("button", { name: bouton }));
+    await user.click(await screen.findByRole("button", { name: "Demander des compléments" }));
     await user.type(within(screen.getByRole("dialog")).getByRole("textbox"), "Texte");
-    await user.click(screen.getByRole("button", { name: confirmation }));
+    await user.click(screen.getByRole("button", { name: "Envoyer la demande de compléments" }));
     expect(await screen.findByText(detail)).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByText("Demande refusée.")).not.toBeInTheDocument();

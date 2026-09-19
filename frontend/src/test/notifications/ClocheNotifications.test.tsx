@@ -6,24 +6,42 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { NotificationApi, NotificationsResponseApi } from "../../api/notifications";
+import { AuthProvider } from "../../features/auth/AuthProvider";
 import { ClocheNotifications } from "../../features/notifications/components/ClocheNotifications/ClocheNotifications";
+import { AppShell } from "../../layout/AppShell";
 import { createQueryClient } from "../../queryClient";
 import { server } from "../server";
 import { seedSession } from "../utils";
 
-const DetailStub = () => <p>Détail SIÈGE de la demande (page)</p>;
+const DetailSiegeStub = () => <p>Détail SIÈGE de la demande (page)</p>;
+const DetailDistributeurStub = () => <p>Détail DISTRIBUTEUR de la demande (page)</p>;
 
-const renderCloche = () =>
+const renderCloche = (role: "SIEGE" | "DISTRIBUTEUR" = "SIEGE") =>
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={["/siege"]}>
+      <MemoryRouter initialEntries={[`/${role.toLowerCase()}`]}>
         <p>Hors composant</p>
         <Routes>
-          <Route path="/siege" element={<ClocheNotifications />} />
-          <Route path="/siege/demandes/:id" element={<DetailStub />} />
+          <Route path="/siege" element={<ClocheNotifications role="SIEGE" />} />
+          <Route path="/distributeur" element={<ClocheNotifications role="DISTRIBUTEUR" />} />
+          <Route path="/siege/demandes/:id" element={<DetailSiegeStub />} />
+          <Route path="/distributeur/demandes/:id" element={<DetailDistributeurStub />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
+  );
+
+const renderAppShell = () =>
+  render(
+    <AuthProvider>
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter>
+          <AppShell>
+            <p>Contenu</p>
+          </AppShell>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </AuthProvider>,
   );
 
 const notification = (overrides: Partial<NotificationApi> & Pick<NotificationApi, "id" | "created_at" | "message">): NotificationApi => ({
@@ -84,6 +102,14 @@ beforeEach(() => {
 });
 
 describe("ClocheNotifications — badge et aria-label", () => {
+  it("est montée par AppShell pour le distributeur", async () => {
+    seedSession("DISTRIBUTEUR");
+    mockNotifications({ non_vues: 1, notifications: NOTIFICATIONS.slice(0, 1) });
+    renderAppShell();
+
+    expect(await screen.findByRole("button", { name: "Notifications, 1 nouvelle" })).toBeInTheDocument();
+  });
+
   it("affiche le nombre de notifications non vues", async () => {
     mockNotifications({ non_vues: 2, notifications: NOTIFICATIONS.slice(0, 2) });
     renderCloche();
@@ -323,6 +349,32 @@ describe("ClocheNotifications — navigation", () => {
     await user.click(screen.getByText("Nouvelle demande reçue"));
 
     expect(await screen.findByText("Détail SIÈGE de la demande (page)")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Notifications" })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["COMPLEMENTS_DEMANDES", "Compléments demandés"],
+    ["DEMANDE_REFUSEE", "Demande refusée"],
+  ] as const)("%s côté distributeur : affiche le badge et navigue vers sa demande", async (typeNotification, titre) => {
+    seedSession("DISTRIBUTEUR");
+    const user = userEvent.setup();
+    mockNotificationsMutable([
+      notification({
+        id: `notif-${typeNotification}`,
+        type_notification: typeNotification,
+        titre,
+        message: "Message du siège.",
+        created_at: "2026-09-19T10:00:00Z",
+      }),
+    ]);
+    renderCloche("DISTRIBUTEUR");
+
+    expect(await screen.findByRole("button", { name: "Notifications, 1 nouvelle" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Notifications/ }));
+    expect(screen.getByText(titre)).toBeInTheDocument();
+    await user.click(screen.getByText(titre));
+
+    expect(await screen.findByText("Détail DISTRIBUTEUR de la demande (page)")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Notifications" })).not.toBeInTheDocument();
   });
 });

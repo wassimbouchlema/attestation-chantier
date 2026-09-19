@@ -29,6 +29,7 @@ export const SiegeDemandeConsultationPage = () => {
     fermerErreurPdf,
     retournerAuxDemandes,
     traitable,
+    peutDemanderComplements,
     actionTraitement,
     ouvrirTraitement,
     fermerTraitement,
@@ -133,9 +134,11 @@ export const SiegeDemandeConsultationPage = () => {
                 )}
                 {traitable && (
                   <div className="fdr-actions-globales">
-                    <Button variant="secondary" onClick={() => ouvrirTraitement("demander-complements")}>
-                      Demander des compléments
-                    </Button>
+                    {peutDemanderComplements && (
+                      <Button variant="secondary" onClick={() => ouvrirTraitement("demander-complements")}>
+                        Demander des compléments
+                      </Button>
+                    )}
                     <Button variant="danger" onClick={() => ouvrirTraitement("refuser")}>
                       Refuser
                     </Button>

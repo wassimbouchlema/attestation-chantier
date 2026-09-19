@@ -122,6 +122,18 @@ export const DemandeConsultationPage = () => {
                 </Surface>
               )}
 
+              {demande.complement_actif && (
+                <Surface>
+                  <Title heading="h2">Compléments demandés par le siège</Title>
+                  <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                    <Restitution label="Demandés le">
+                      {formatDateHeure(demande.complement_actif.requested_at)}
+                    </Restitution>
+                  </div>
+                  <p>{demande.complement_actif.message}</p>
+                </Surface>
+              )}
+
               <Surface>
                 <Title heading="h2">Document transmis</Title>
                 <p>Formulaire de déclaration du risque</p>

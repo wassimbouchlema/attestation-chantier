@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import type { Role } from "../../../../api/auth";
 import type { NotificationApi } from "../../../../api/notifications";
 import { useMarquerNotificationsVues, useNotifications } from "../../queries";
 
@@ -11,7 +12,7 @@ const TAILLE_PAGE = 6;
  * `seen_at=null` — jamais au GET (refetch en arrière-plan possible). Elles
  * restent visibles après avoir été vues.
  */
-export const useClocheNotifications = () => {
+export const useClocheNotifications = (role: Role) => {
   const [ouvert, setOuvert] = useState(false);
   const [nombreAffiche, setNombreAffiche] = useState(TAILLE_PAGE);
   // `position: fixed`, calculée depuis le rect réel de la cloche (Header non
@@ -77,7 +78,7 @@ export const useClocheNotifications = () => {
 
   const ouvrirDemande = (demandeId: string) => {
     fermer();
-    navigate(`/siege/demandes/${demandeId}`);
+    navigate(`/${role.toLowerCase()}/demandes/${demandeId}`);
   };
 
   useEffect(() => {

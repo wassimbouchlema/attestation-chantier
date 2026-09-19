@@ -39,13 +39,13 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
     def get_queryset(self):
         return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
 
-    def _conflit_traitement(self, demande):
+    def _conflit_traitement(self, demande, *, verifier_complement_actif=False):
         if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
             return Response(
                 {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
                 status=status.HTTP_409_CONFLICT,
             )
-        if demande.complements.filter(received_at__isnull=True).exists():
+        if verifier_complement_actif and demande.complements.filter(received_at__isnull=True).exists():
             return Response(
                 {
                     "code": "COMPLEMENTS_DEJA_DEMANDES",
@@ -61,7 +61,7 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         entree.is_valid(raise_exception=True)
         with transaction.atomic():
             demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
-            conflit = self._conflit_traitement(demande)
+            conflit = self._conflit_traitement(demande, verifier_complement_actif=True)
             if conflit is not None:
                 return conflit
             message = entree.validated_data["message"]

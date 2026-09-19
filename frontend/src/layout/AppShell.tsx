@@ -40,7 +40,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         />
         {utilisateur && (
           <div className="app-shell__zone-utilisateur">
-            {utilisateur.role === "SIEGE" && <ClocheNotifications />}
+            <ClocheNotifications role={utilisateur.role} />
             <User name={nomComplet} profile={LIBELLE_ROLE[utilisateur.role]}>
               <Button variant="ghost" className="user-logout-action" onClick={deconnecter}>
                 Déconnexion

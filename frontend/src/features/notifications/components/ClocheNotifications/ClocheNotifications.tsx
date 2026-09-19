@@ -1,6 +1,7 @@
 import { Tag } from "@axa-fr/canopee-react/distributeur";
 import notificationsIcon from "@material-symbols/svg-400/outlined/notifications.svg";
 
+import type { Role } from "../../../../api/auth";
 import { formatDateHeure } from "../../../../helpers/formatDateHeure";
 import "./ClocheNotifications.css";
 import { useClocheNotifications } from "./useClocheNotifications";
@@ -17,7 +18,7 @@ const libelleAriaTrigger = (nonVues: number): string => {
   return `Notifications, ${nonVues} nouvelle${nonVues > 1 ? "s" : ""}`;
 };
 
-export const ClocheNotifications = () => {
+export const ClocheNotifications = ({ role }: { role: Role }) => {
   const {
     ouvert,
     basculer,
@@ -30,7 +31,7 @@ export const ClocheNotifications = () => {
     nonVues,
     idsNouveauPendantOuverture,
     ouvrirDemande,
-  } = useClocheNotifications();
+  } = useClocheNotifications(role);
 
   return (
     <div className="cloche-notifications">

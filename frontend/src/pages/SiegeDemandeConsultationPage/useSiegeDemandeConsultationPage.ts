@@ -75,6 +75,7 @@ export const useSiegeDemandeConsultationPage = () => {
 
   const introuvable = demandeQuery.error instanceof ErreurDemandeIntrouvable;
   const demande = demandeQuery.data;
+  const traitable = demande?.statut === "EN_COURS" && demande.decision === null;
 
   return {
     isLoading: demandeQuery.isLoading,
@@ -82,7 +83,8 @@ export const useSiegeDemandeConsultationPage = () => {
     erreurChargement: demandeQuery.isError && !introuvable ? messageErreurAffichable(demandeQuery.error) : null,
     reessayerChargement: () => demandeQuery.refetch(),
     demande,
-    traitable: demande?.statut === "EN_COURS" && demande.decision === null && !demande.complement_actif,
+    traitable,
+    peutDemanderComplements: traitable && !demande?.complement_actif,
     actionTraitement,
     ouvrirTraitement,
     fermerTraitement,

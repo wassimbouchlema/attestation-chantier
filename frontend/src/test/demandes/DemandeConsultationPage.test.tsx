@@ -187,6 +187,27 @@ describe("DemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.queryByRole("button", { name: "Supprimer note.pdf" })).not.toBeInTheDocument();
   });
 
+  it("affiche la demande de compléments du siège en lecture seule", async () => {
+    const complement = {
+      id: "complement-1",
+      message: "Merci de préciser la nature exacte des travaux.",
+      requested_at: "2026-09-19T10:00:00Z",
+      received_at: null,
+    };
+    mockDemande(demandeApi({ complement_actif: complement }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Compléments demandés par le siège" })).toBeInTheDocument();
+    expect(screen.getByText("Demandés le")).toBeInTheDocument();
+    expect(screen.getByText("19/09/2026 à 12:00")).toBeInTheDocument();
+    expect(screen.getByText(complement.message)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Envoyer.*complément/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Téléverser|Parcourir/i)).not.toBeInTheDocument();
+  });
+
   it("demande introuvable (404) affiche un message dédié", async () => {
     server.use(http.get("*/demandes/:id/", () => new HttpResponse(null, { status: 404 })));
     renderPage();

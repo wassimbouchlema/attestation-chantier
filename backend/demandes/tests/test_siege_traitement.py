@@ -51,6 +51,11 @@ class SiegeTraitementTests(APITestCase):
         detail = self.client.get(reverse("demande-detail", kwargs={"pk": self.demande.pk}))
         self.assertEqual(detail.data["complement_actif"], response.data["complement_actif"])
 
+        autre_distributeur = Utilisateur.objects.create_user(username="autre", role=Role.DISTRIBUTEUR)
+        self.client.force_authenticate(autre_distributeur)
+        detail_autre = self.client.get(reverse("demande-detail", kwargs={"pk": self.demande.pk}))
+        self.assertEqual(detail_autre.status_code, 404)
+
     def test_deuxieme_complement_actif(self):
         self.poster("demander-complements", {"message": "Premier message"})
         response = self.poster("demander-complements", {"message": "Autre message"})
@@ -82,15 +87,15 @@ class SiegeTraitementTests(APITestCase):
         self.verifier_notification(TypeNotification.DEMANDE_REFUSEE, self.demande.motif_refus)
         self.assertEqual(self.client.get("/api/siege/demandes/").data["count"], 0)
 
-    def test_refus_bloque_par_complement_actif(self):
+    def test_refus_autorise_avec_complement_actif(self):
         DemandeComplement.objects.create(demande=self.demande, message="Précisions ?")
         response = self.poster("refuser", {"motif": "Refus"})
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         self.demande.refresh_from_db()
-        self.assertIsNone(self.demande.decision)
-        self.assertEqual(self.demande.statut, StatutDemande.EN_COURS)
-        self.assertEqual(self.demande.motif_refus, "")
-        self.assertFalse(Notification.objects.exists())
+        self.assertEqual(self.demande.decision, DecisionDemande.REFUSEE)
+        self.assertEqual(self.demande.statut, StatutDemande.TRAITE)
+        self.assertEqual(self.demande.motif_refus, "Refus")
+        self.verifier_notification(TypeNotification.DEMANDE_REFUSEE, "Refus")
 
     def test_complement_recu_ne_bloque_pas_le_traitement(self):
         ancien = DemandeComplement.objects.create(demande=self.demande, message="Ancien", received_at=timezone.now())
