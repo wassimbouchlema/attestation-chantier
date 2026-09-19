@@ -20,7 +20,7 @@ const ID_DEMANDE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const FDR_COMPLET: FormulaireRisqueApi = {
   assure_nom: "AXA Construction",
   assure_ville: "Paris",
-  assure_numero_contrat: "123456789",
+  assure_numero_contrat: "1234567890123",
   chantier_nom: "Tour Horizon",
   chantier_ville: "Lyon",
   type_chantier: "NEUVE",
@@ -189,6 +189,24 @@ describe("FdrValidationPage — chargement du récapitulatif", () => {
     expect(screen.queryByText("NEUVE")).not.toBeInTheDocument();
     expect(screen.getByText("Bureau")).toBeInTheDocument();
     expect(screen.getByText("Entreprise principale")).toBeInTheDocument();
+  });
+});
+
+describe("FdrValidationPage — actions de bas de page", () => {
+  it("Retour à gauche, Enregistrer le brouillon et Envoyer au siège regroupés à droite", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderWizard();
+
+    const retour = await screen.findByRole("button", { name: "Retour" });
+    const barre = retour.closest(".fdr-actions-globales") as HTMLElement;
+    const groupe = barre.querySelector(".fdr-actions-globales__groupe") as HTMLElement;
+    expect(groupe.contains(retour)).toBe(false);
+    expect(within(groupe).getByRole("button", { name: "Enregistrer le brouillon" })).toBeInTheDocument();
+    expect(within(groupe).getByRole("button", { name: "Envoyer au siège" })).toBeInTheDocument();
+    expect(barre.firstElementChild).toBe(retour);
+    expect(barre.lastElementChild).toBe(groupe);
   });
 });
 

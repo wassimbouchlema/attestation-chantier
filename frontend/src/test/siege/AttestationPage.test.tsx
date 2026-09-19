@@ -21,7 +21,7 @@ const demande: DemandeDetail = {
   created_at: "2026-09-19T09:00:00Z", updated_at: "2026-09-19T09:00:00Z", envoye_at: null,
   last_relance_at: null, commentaire_distributeur: "", attestation_existe: false,
   fdr: {
-    assure_nom: "Entreprise FDR", assure_ville: "Paris", assure_numero_contrat: "123456789",
+    assure_nom: "Entreprise FDR", assure_ville: "Paris", assure_numero_contrat: "1234567890123",
     chantier_nom: "Tour Horizon", chantier_ville: "Lyon", type_chantier: "NEUVE", modification_structure: null,
     chantier_atypique: false, usage: "BUREAU", usage_autre_texte: "", date_debut: "2026-01-10",
     date_fin: "2026-06-30", montant_total: "100000.00", intervention_description: "Rénovation",
@@ -110,7 +110,7 @@ describe("Éditeur SIÈGE", () => {
     expect(feuille.contains(toolbar)).toBe(false);
     expect(feuille.contains(editeur)).toBe(true);
     expect(within(feuille).getByAltText("AXA")).toBeInTheDocument();
-    for (const texte of ["Attestation d'assurance", "Jean Dupont", "Entreprise FDR", "Contrat n° 123456789"]) {
+    for (const texte of ["Attestation d'assurance", "Jean Dupont", "Entreprise FDR", "Contrat n° 1234567890123"]) {
       const element = within(feuille).getByText(texte);
       expect(editeur.contains(element)).toBe(false);
     }
@@ -376,5 +376,30 @@ describe("Validation et acceptation SIÈGE", () => {
     expect(await screen.findByText("Cette attestation est déjà validée.")).toBeInTheDocument();
     expect(screen.queryByText(/Accueil SIÈGE/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Contrôle de cohérence" })).toBeInTheDocument();
+  });
+});
+
+describe("Barre d'actions SIÈGE", () => {
+  it("Retour à gauche, actions d'attestation groupées à droite, contrôle de cohérence dans une section distincte", async () => {
+    renderPage();
+    await attendreEditeur();
+
+    const retour = screen.getByRole("button", { name: "Retour à la demande" });
+    const barre = retour.closest(".fdr-actions-globales") as HTMLElement;
+    const groupe = barre.querySelector(".fdr-actions-globales__groupe") as HTMLElement;
+    expect(barre.firstElementChild).toBe(retour);
+    expect(barre.lastElementChild).toBe(groupe);
+    expect(within(groupe).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Enregistrer",
+      "Prévisualiser",
+      "Télécharger la prévisualisation",
+      "Valider et accepter",
+    ]);
+
+    const analyser = screen.getByRole("button", { name: "Analyser avec IA" });
+    expect(barre.contains(analyser)).toBe(false);
+    const titre = screen.getByRole("heading", { name: "Contrôle de cohérence" });
+    expect(barre.compareDocumentPosition(titre) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titre.closest(".surface")).toContainElement(analyser);
   });
 });

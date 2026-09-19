@@ -4,6 +4,7 @@ import { Controller } from "react-hook-form";
 import { OPTIONS_TYPE_CHANTIER } from "../../constants/optionsTypeChantier";
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
+import { VilleField } from "../VilleField/VilleField";
 import { useChantierSection } from "./useChantierSection";
 
 export const ChantierSection = ({
@@ -56,14 +57,7 @@ export const ChantierSection = ({
             message={errors.chantier_nom?.message}
             forceDisplayMessage={Boolean(errors.chantier_nom)}
           />
-          <TextInput
-            label="Ville"
-            labelPosition="top"
-            required
-            {...register("chantier_ville")}
-            message={errors.chantier_ville?.message}
-            forceDisplayMessage={Boolean(errors.chantier_ville)}
-          />
+          <VilleField name="chantier_ville" label="Ville" />
           <SelectInput
             label="Type de chantier"
             labelPosition="top"

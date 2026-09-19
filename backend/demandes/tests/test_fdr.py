@@ -127,12 +127,16 @@ class FormulaireRisqueEndpointTests(APITestCase):
         self.assertEqual(response.data["assure_nom"], "Dupont SARL")
         self.assertEqual(response.data["chantier_nom"], "Chantier des Tilleuls")
 
-    def test_numero_contrat_valide_selon_le_format(self):
+    def test_numero_contrat_doit_contenir_exactement_13_chiffres(self):
         self._authentifier(self.distributeur_a)
         cas = [
             ("12A3", status.HTTP_400_BAD_REQUEST),
-            ("123456789012345", status.HTTP_400_BAD_REQUEST),
+            ("123456789012", status.HTTP_400_BAD_REQUEST),
+            ("12345678901234", status.HTTP_400_BAD_REQUEST),
+            ("123456789012A", status.HTTP_400_BAD_REQUEST),
+            ("١٢٣٤٥٦٧٨٩٠١٢٣", status.HTTP_400_BAD_REQUEST),
             ("", status.HTTP_200_OK),
+            ("0123456789012", status.HTTP_200_OK),
             ("1234567890123", status.HTTP_200_OK),
         ]
 
@@ -142,6 +146,42 @@ class FormulaireRisqueEndpointTests(APITestCase):
                     self._url_fdr(self.demande_a), {"assure_numero_contrat": valeur}, format="json"
                 )
                 self.assertEqual(response.status_code, code_attendu)
+                if code_attendu == status.HTTP_400_BAD_REQUEST:
+                    self.assertEqual(
+                        response.data["assure_numero_contrat"][0],
+                        "Le numéro de contrat doit contenir exactement 13 chiffres.",
+                    )
+
+    def test_zero_initial_du_numero_de_contrat_conserve(self):
+        self._authentifier(self.distributeur_a)
+
+        self.client.patch(self._url_fdr(self.demande_a), {"assure_numero_contrat": "0001234567890"}, format="json")
+
+        response = self.client.get(self._url_fdr(self.demande_a))
+        self.assertEqual(response.data["assure_numero_contrat"], "0001234567890")
+
+    def test_noms_assure_et_chantier_acceptent_accents_apostrophes_et_tirets(self):
+        self._authentifier(self.distributeur_a)
+
+        for champ in ["assure_nom", "chantier_nom"]:
+            for valeur in ["Société Générale Île-de-France", "L'Hôpital d'Ançenis 2", "Œuvre Müller-Ström’s", "ÉÈÇ"]:
+                with self.subTest(champ=champ, valeur=valeur):
+                    response = self.client.patch(self._url_fdr(self.demande_a), {champ: valeur}, format="json")
+                    self.assertEqual(response.status_code, status.HTTP_200_OK)
+                    self.assertEqual(response.data[champ], valeur)
+
+    def test_noms_assure_et_chantier_refusent_les_symboles(self):
+        self._authentifier(self.distributeur_a)
+
+        for champ in ["assure_nom", "chantier_nom"]:
+            for valeur in ["A<b>", "Dupont {SARL}", "jean@axa", "Prix $100", "100%", "Dupont_SARL", "A;B", "Tour\nHorizon"]:
+                with self.subTest(champ=champ, valeur=valeur):
+                    response = self.client.patch(self._url_fdr(self.demande_a), {champ: valeur}, format="json")
+                    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                    self.assertEqual(
+                        response.data[champ][0],
+                        "Seuls les lettres, chiffres, espaces, apostrophes et tirets sont autorisés.",
+                    )
 
     def test_montant_negatif_rejete_pour_montant_total_et_prestation(self):
         self._authentifier(self.distributeur_a)

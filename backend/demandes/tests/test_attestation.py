@@ -47,7 +47,7 @@ class AttestationTests(APITestCase):
         self.assertEqual(
             response.data["contenu_html"], nettoyer_html(generer_contenu_initial(self.demande.fdr, preparation=True))
         )
-        for valeur in ["AXA Construction", "123456789", "Tour Horizon", "Lyon", "10/01/2026", "30/06/2026",
+        for valeur in ["AXA Construction", "1234567890123", "Tour Horizon", "Lyon", "10/01/2026", "30/06/2026",
                        "Rénovation complète des bureaux", "100000.00", "50000.00", "Entreprise principale",
                        "Document préparé à partir des informations déclarées dans le formulaire de risque."]:
             self.assertIn(valeur, response.data["contenu_html"])
@@ -151,7 +151,7 @@ class AttestationTests(APITestCase):
                     self.assertIn("preparation-attestation-", pdf["Content-Disposition"])
                     texte = "".join(page.extract_text() for page in PdfReader(io.BytesIO(pdf.content)).pages)
                     for attendu in ["DOCUMENT DE PRÉVISUALISATION — NON VALIDÉ", "ATTESTATION D'ASSURANCE",
-                                    "Modification siège enregistrée", "AXA Construction", "123456789"]:
+                                    "Modification siège enregistrée", "AXA Construction", "1234567890123"]:
                         self.assertIn(attendu, texte)
                     self.assertNotIn("PRÉPARATION D'ATTESTATION", texte)
                     self.assertNotIn("NON VALIDÉE", texte)

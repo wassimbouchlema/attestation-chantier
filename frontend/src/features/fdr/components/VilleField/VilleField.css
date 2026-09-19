@@ -1,0 +1,8 @@
+.ville-field .react-select {
+  max-width: 220px;
+}
+
+.ville-field .ville-field__menu {
+  min-width: 100%;
+  width: max-content;
+}

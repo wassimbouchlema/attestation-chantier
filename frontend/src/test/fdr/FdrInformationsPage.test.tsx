@@ -12,7 +12,7 @@ import { AuthProvider } from "../../features/auth/AuthProvider";
 import { FdrInformationsPage } from "../../pages/FdrInformations/FdrInformationsPage";
 import { createQueryClient } from "../../queryClient";
 import { server } from "../server";
-import { seedSession } from "../utils";
+import { choisirVille, seedSession } from "../utils";
 
 const ID_DEMANDE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const TITRES_SECTIONS = ["Assuré", "Chantier", "Usage & calendrier", "Intervention", "Questions métier"];
@@ -71,7 +71,7 @@ const FDR_VIDE: FormulaireRisqueApi = {
 const FDR_COMPLET: FormulaireRisqueApi = {
   assure_nom: "AXA Construction",
   assure_ville: "Paris",
-  assure_numero_contrat: "123456789",
+  assure_numero_contrat: "1234567890123",
   chantier_nom: "Tour Horizon",
   chantier_ville: "Lyon",
   type_chantier: "RENOVATION",
@@ -129,7 +129,7 @@ describe("FdrInformationsPage — chargement", () => {
 
     expect(screen.getByText(/Chargement en cours/)).toBeInTheDocument();
     expect(await screen.findByLabelText("Nom / raison sociale")).toHaveValue("AXA Construction");
-    expect(screen.getByLabelText("Ville")).toHaveValue("");
+    expect(screen.getByText("Saisissez une commune")).toBeInTheDocument();
     expect(screen.getByLabelText("Numéro de contrat")).toHaveValue("");
   });
 
@@ -208,19 +208,77 @@ describe("FdrInformationsPage — section Assuré (BROUILLON)", () => {
     expect(screen.getByLabelText("Nom / raison sociale")).toBeInTheDocument();
   });
 
-  it("rejette un numéro de contrat non numérique ou trop long", async () => {
+  it.each([
+    ["12AB", "lettres"],
+    ["123456789012", "12 chiffres"],
+    ["12345678901234", "14 chiffres"],
+  ])("rejette un numéro de contrat invalide (%s, %s)", async (valeur) => {
     const user = userEvent.setup();
     mockDemande(demandeApi());
     renderWizard();
     await screen.findByLabelText("Nom / raison sociale");
 
-    await user.type(screen.getByLabelText("Numéro de contrat"), "12AB");
+    await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), valeur);
     await user.click(screen.getByRole("button", { name: "Valider" }));
 
     expect(
-      await screen.findByText("Le numéro de contrat doit être uniquement numérique (13 chiffres maximum)."),
+      await screen.findByText("Le numéro de contrat doit contenir exactement 13 chiffres."),
     ).toBeInTheDocument();
   });
+
+  it("accepte 13 chiffres et conserve le zéro initial (texte, pas de champ numérique)", async () => {
+    const user = userEvent.setup();
+    mockDemande(demandeApi());
+    renderWizard();
+    await screen.findByLabelText("Nom / raison sociale");
+    const champ = screen.getByLabelText("Numéro de contrat");
+
+    await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
+    await choisirVille(user, "Paris");
+    await user.type(champ, "0123456789012");
+
+    expect(champ).toHaveAttribute("inputmode", "numeric");
+    expect(champ).not.toHaveAttribute("type", "number");
+    expect(champ).toHaveValue("0123456789012");
+    await user.click(screen.getByRole("button", { name: "Valider" }));
+    expect(await screen.findByText("0123456789012")).toBeInTheDocument();
+  });
+
+  it.each(["Société Générale Île-de-France", "L'Hôpital d'Ançenis 2", "Œuvre Müller-Ström’s"])(
+    "accepte un nom d'assuré avec accents, apostrophe ou tiret (%s)",
+    async (nom) => {
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+
+      await user.type(screen.getByLabelText("Nom / raison sociale"), nom);
+      await choisirVille(user, "Paris");
+      await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
+      await user.click(screen.getByRole("button", { name: "Valider" }));
+
+      expect(await screen.findByText(nom)).toBeInTheDocument();
+    },
+  );
+
+  it.each(["Dupont <SARL>", "Jean@axa", "Prix $100", "100%", "{{Tour}"])(
+    "rejette un nom d'assuré avec des symboles interdits (%s)",
+    async (nom) => {
+      const user = userEvent.setup();
+      mockDemande(demandeApi());
+      renderWizard();
+      await screen.findByLabelText("Nom / raison sociale");
+
+      await user.type(screen.getByLabelText("Nom / raison sociale"), nom);
+      await user.click(screen.getByRole("button", { name: "Valider" }));
+
+      expect(
+        await screen.findByText("Seuls les lettres, chiffres, espaces, apostrophes et tirets sont autorisés."),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("Valider avec des champs valides bascule en restitution et active la section suivante, sans requête PATCH, les autres sections restant visibles", async () => {
     // server.listen({ onUnhandledRequest: "error" }) (test/setup.ts) : aucun handler PATCH
@@ -231,8 +289,8 @@ describe("FdrInformationsPage — section Assuré (BROUILLON)", () => {
     await screen.findByLabelText("Nom / raison sociale");
 
     await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
     await user.click(screen.getByRole("button", { name: "Valider" }));
 
     expect(await screen.findByText("AXA Construction")).toBeInTheDocument();
@@ -250,23 +308,23 @@ describe("FdrInformationsPage — section Assuré (BROUILLON)", () => {
     await screen.findByLabelText("Nom / raison sociale");
 
     await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
     await user.click(screen.getByRole("button", { name: "Valider" }));
     await screen.findByText("AXA Construction");
 
     await user.click(screen.getByRole("button", { name: "Modifier l'étape Assuré" }));
 
     expect(screen.getByLabelText("Nom / raison sociale")).toHaveValue("AXA Construction");
-    expect(screen.getByLabelText("Ville")).toHaveValue("Paris");
+    expect(screen.getByText(/Paris/)).toBeInTheDocument();
   });
 });
 
 describe("FdrInformationsPage — champs conditionnels", () => {
   const avancerJusquaChantier = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
     await user.click(screen.getByRole("button", { name: "Valider" }));
     await screen.findByLabelText("Nom du chantier");
   };
@@ -316,7 +374,7 @@ describe("FdrInformationsPage — champs conditionnels", () => {
     await avancerJusquaChantier(user);
 
     await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
+    await choisirVille(user, "Paris");
     await user.selectOptions(screen.getByLabelText("Type de chantier"), "Rénovation");
     await user.click(screen.getByRole("button", { name: "Valider" }));
 
@@ -330,13 +388,13 @@ describe("FdrInformationsPage — champs conditionnels", () => {
 describe("FdrInformationsPage — sections Usage/Intervention/Questions métier", () => {
   const avancerJusquaUsage = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
     await user.click(screen.getByRole("button", { name: "Valider" }));
     await screen.findByLabelText("Nom du chantier");
 
     await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
-    await user.type(screen.getByLabelText("Ville"), "Lyon");
+    await choisirVille(user, "Lyon");
     await user.selectOptions(screen.getByLabelText("Type de chantier"), "Construction neuve");
     await user.click(within(screen.getByRole("radiogroup", { name: "Chantier atypique ?" })).getByLabelText("Non"));
     await user.click(screen.getByRole("button", { name: "Valider" }));
@@ -436,13 +494,13 @@ describe("FdrInformationsPage — sections Usage/Intervention/Questions métier"
 
 const remplirLes5Sections = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-  await user.type(screen.getByLabelText("Ville"), "Paris");
-  await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+  await choisirVille(user, "Paris");
+  await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
   await user.click(screen.getByRole("button", { name: "Valider" }));
   await screen.findByLabelText("Nom du chantier");
 
   await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
-  await user.type(screen.getByLabelText("Ville"), "Lyon");
+  await choisirVille(user, "Lyon");
   await user.selectOptions(screen.getByLabelText("Type de chantier"), "Construction neuve");
   await user.click(within(screen.getByRole("radiogroup", { name: "Chantier atypique ?" })).getByLabelText("Non"));
   await user.click(screen.getByRole("button", { name: "Valider" }));
@@ -726,8 +784,8 @@ describe("FdrInformationsPage — SelectInput sans placeholder injecté", () => 
     renderWizard();
     await screen.findByLabelText("Nom / raison sociale");
     await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-    await user.type(screen.getByLabelText("Ville"), "Paris");
-    await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+    await choisirVille(user, "Paris");
+    await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
     await user.click(screen.getByRole("button", { name: "Valider" }));
     await screen.findByLabelText("Nom du chantier");
 

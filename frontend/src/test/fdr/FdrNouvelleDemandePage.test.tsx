@@ -10,7 +10,7 @@ import { AuthProvider } from "../../features/auth/AuthProvider";
 import { FdrNouvelleDemandePage } from "../../pages/FdrNouvelleDemandePage/FdrNouvelleDemandePage";
 import { createQueryClient } from "../../queryClient";
 import { server } from "../server";
-import { seedSession } from "../utils";
+import { choisirVille, seedSession } from "../utils";
 
 const renderPage = ({ strict = false }: { strict?: boolean } = {}) => {
   const arbre = (
@@ -36,13 +36,13 @@ const PiecesStub = () => {
 
 const remplirLes5Sections = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(screen.getByLabelText("Nom / raison sociale"), "AXA Construction");
-  await user.type(screen.getByLabelText("Ville"), "Paris");
-  await user.type(screen.getByLabelText("Numéro de contrat"), "123456789");
+  await choisirVille(user, "Paris");
+  await user.type(screen.getByLabelText("Numéro de contrat"), "1234567890123");
   await user.click(screen.getByRole("button", { name: "Valider" }));
   await screen.findByLabelText("Nom du chantier");
 
   await user.type(screen.getByLabelText("Nom du chantier"), "Tour Horizon");
-  await user.type(screen.getByLabelText("Ville"), "Lyon");
+  await choisirVille(user, "Lyon");
   await user.selectOptions(screen.getByLabelText("Type de chantier"), "Construction neuve");
   await user.click(within(screen.getByRole("radiogroup", { name: "Chantier atypique ?" })).getByLabelText("Non"));
   await user.click(screen.getByRole("button", { name: "Valider" }));

@@ -79,12 +79,14 @@ export const FdrValidationPage = () => {
           <Button variant="secondary" onClick={retourner}>
             Retour
           </Button>
-          <Button variant="secondary" onClick={enregistrerBrouillon} disabled={enregistrementEnCours || envoiEnCours}>
-            {enregistrementEnCours ? "Enregistrement…" : "Enregistrer le brouillon"}
-          </Button>
-          <Button variant="primary" onClick={envoyer} disabled={envoiEnCours || enregistrementEnCours}>
-            {envoiEnCours ? "Envoi…" : "Envoyer au siège"}
-          </Button>
+          <div className="fdr-actions-globales__groupe">
+            <Button variant="secondary" onClick={enregistrerBrouillon} disabled={enregistrementEnCours || envoiEnCours}>
+              {enregistrementEnCours ? "Enregistrement…" : "Enregistrer le brouillon"}
+            </Button>
+            <Button variant="primary" onClick={envoyer} disabled={envoiEnCours || enregistrementEnCours}>
+              {envoiEnCours ? "Envoi…" : "Envoyer au siège"}
+            </Button>
+          </div>
         </div>
       )}
     </>

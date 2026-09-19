@@ -2,6 +2,7 @@ import { Button, Restitution, TextInput, VerticalStep } from "@axa-fr/canopee-re
 
 import { versStepMode } from "../../helpers/versStepMode";
 import type { EtatSection } from "../../types/EtatSection";
+import { VilleField } from "../VilleField/VilleField";
 import { useAssureSection } from "./useAssureSection";
 
 export const AssureSection = ({
@@ -41,14 +42,7 @@ export const AssureSection = ({
             message={errors.assure_nom?.message}
             forceDisplayMessage={Boolean(errors.assure_nom)}
           />
-          <TextInput
-            label="Ville"
-            labelPosition="top"
-            required
-            {...register("assure_ville")}
-            message={errors.assure_ville?.message}
-            forceDisplayMessage={Boolean(errors.assure_ville)}
-          />
+          <VilleField name="assure_ville" label="Ville" />
           <TextInput
             label="Numéro de contrat"
             labelPosition="top"

@@ -18,7 +18,7 @@ def _valeurs_fdr_complet(**overrides):
     valeurs = dict(
         assure_nom="AXA Construction",
         assure_ville="Paris",
-        assure_numero_contrat="123456789",
+        assure_numero_contrat="1234567890123",
         chantier_nom="Tour Horizon",
         chantier_ville="Lyon",
         type_chantier=TypeChantier.NEUVE,
@@ -76,7 +76,7 @@ class ProjetAttestationEndpointTests(APITestCase):
         self.assertTrue(ProjetAttestation.objects.filter(pk=self.demande_en_cours.pk).exists())
         contenu = response.data["contenu_html"]
         self.assertIn("AXA Construction", contenu)
-        self.assertIn("123456789", contenu)
+        self.assertIn("1234567890123", contenu)
         self.assertIn("Tour Horizon", contenu)
         self.assertIn("Lyon", contenu)
         self.assertIn("Construction neuve", contenu)
@@ -342,7 +342,7 @@ class ProjetAttestationPdfTests(APITestCase):
             "NON DÉFINITIF",
             "ATTESTATION D'ASSURANCE",
             "Validation définitive : réservée au siège.",
-            "123456789",
+            "1234567890123",
             "AXA Construction",
             "Tour Horizon",
             "logo-axa.svg",

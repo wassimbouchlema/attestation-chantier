@@ -34,7 +34,7 @@ const renderPage = () =>
 const FDR_MINIMAL: FormulaireRisqueApi = {
   assure_nom: "AXA Construction",
   assure_ville: "Paris",
-  assure_numero_contrat: "123456789",
+  assure_numero_contrat: "1234567890123",
   chantier_nom: "Tour Horizon",
   chantier_ville: "Lyon",
   type_chantier: "NEUVE",

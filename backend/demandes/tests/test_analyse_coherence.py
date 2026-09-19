@@ -210,7 +210,7 @@ class AnalyseCoherenceTests(APITestCase):
         contenu = generer_contenu_initial(self.fdr, preparation=True)
         cas = [
             ("assure_nom", "AXA Construction", "Entreprise différente"),
-            ("assure_numero_contrat", "123456789", "987654321"),
+            ("assure_numero_contrat", "1234567890123", "987654321"),
             ("chantier_nom", "Tour Horizon", "Chantier différent"),
             ("date_debut", "10/01/2026", "11/01/2026"),
             ("date_fin", "30/06/2026", "30/06/2027"),

@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from ..evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
 from ..models import DecisionDemande, Demande, FormulaireRisque, TypeChantier, Usage
+from ..validators import valider_nom, valider_numero_contrat
 from .siege import DemandeComplementSerializer
 
 
@@ -57,6 +58,11 @@ class FormulaireRisqueSerializer(serializers.ModelSerializer):
             "activite_non_couverte_texte",
             "travaux_standards",
         ]
+        extra_kwargs = {
+            "assure_nom": {"validators": [valider_nom]},
+            "chantier_nom": {"validators": [valider_nom]},
+            "assure_numero_contrat": {"max_length": None, "validators": [valider_numero_contrat]},
+        }
 
     def _valeur_finale(self, attrs, champ):
         if champ in attrs:

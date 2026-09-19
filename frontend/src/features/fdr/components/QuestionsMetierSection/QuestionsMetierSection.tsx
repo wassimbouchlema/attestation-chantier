@@ -66,6 +66,7 @@ export const QuestionsMetierSection = ({
               label="Explication"
               labelPosition="top"
               required
+              rows={5}
               {...register("activite_non_couverte_texte")}
               message={errors.activite_non_couverte_texte?.message}
               forceDisplayMessage={Boolean(errors.activite_non_couverte_texte)}

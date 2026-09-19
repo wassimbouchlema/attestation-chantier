@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MESSAGE_NOM, REGEX_NOM } from "./reglesTexte";
+
 /**
  * Brique de composition : forme des champs de la section Chantier.
  * La règle conditionnelle "modification_structure obligatoire si
@@ -8,7 +10,7 @@ import { z } from "zod";
  * ne décrit que la forme/les règles par-champ.
  */
 export const schemaChantier = z.object({
-  chantier_nom: z.string().trim().min(1, "Le nom du chantier est obligatoire."),
+  chantier_nom: z.string().trim().min(1, "Le nom du chantier est obligatoire.").regex(REGEX_NOM, MESSAGE_NOM),
   chantier_ville: z.string().trim().min(1, "La ville du chantier est obligatoire."),
   type_chantier: z
     .enum(["", "NEUVE", "RENOVATION"])

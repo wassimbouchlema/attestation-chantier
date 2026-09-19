@@ -3,6 +3,8 @@ import { Button, Loader, MainContainer, Message, Modal, ModalBody, ModalFooter, 
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
 import { ResultatCoherence } from "../../features/attestation/components/ResultatCoherence";
 import { PageHeader } from "../../layout/PageHeader";
+import { Surface } from "../../layout/Surface";
+import "./AttestationPage.css";
 import { useAttestationPage } from "./useAttestationPage";
 
 export const AttestationPage = () => {
@@ -38,33 +40,42 @@ export const AttestationPage = () => {
               {page.dirty && <p>Enregistrez vos modifications avant de générer la prévisualisation.</p>}
               {page.dirty && <p>Enregistrez vos modifications avant de valider l'attestation.</p>}
               <div className="fdr-actions-globales">
-                <Button variant="primary" onClick={page.enregistrer} disabled={page.enregistrementEnCours || page.validationEnCours}>
-                  {page.enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
-                </Button>
-                <Button variant="secondary" onClick={page.previsualiser} disabled={page.pdfDisabled}>
-                  Prévisualiser
-                </Button>
-                <Button variant="secondary" onClick={page.telecharger} disabled={page.pdfDisabled}>
-                  Télécharger la prévisualisation
-                </Button>
-                <Button variant="primary" onClick={page.ouvrirConfirmation} disabled={page.validationDisabled}>
-                  Valider et accepter
-                </Button>
-              </div>
-              <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
-                <h2 id="titre-coherence">Contrôle de cohérence</h2>
-                {page.dirty && <p>Enregistrez vos modifications avant de lancer le contrôle.</p>}
-                <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
-                  {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
-                </Button>
-                <div aria-live="polite">
-                  {page.erreurAnalyse && <Message variant="error" title={page.erreurAnalyse} />}
-                  {page.resultatAnalyse && <ResultatCoherence resultat={page.resultatAnalyse} />}
+                <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
+                <div className="fdr-actions-globales__groupe">
+                  <Button variant="secondary" onClick={page.enregistrer} disabled={page.enregistrementEnCours || page.validationEnCours}>
+                    {page.enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
+                  </Button>
+                  <Button variant="secondary" onClick={page.previsualiser} disabled={page.pdfDisabled}>
+                    Prévisualiser
+                  </Button>
+                  <Button variant="secondary" onClick={page.telecharger} disabled={page.pdfDisabled}>
+                    Télécharger la prévisualisation
+                  </Button>
+                  <Button variant="primary" onClick={page.ouvrirConfirmation} disabled={page.validationDisabled}>
+                    Valider et accepter
+                  </Button>
                 </div>
-              </section>
+              </div>
+              <div className="attestation-coherence">
+                <Surface>
+                  <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
+                    <h2 id="titre-coherence">Contrôle de cohérence</h2>
+                    {page.dirty && <p>Enregistrez vos modifications avant de lancer le contrôle.</p>}
+                    <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
+                      {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
+                    </Button>
+                    <div aria-live="polite">
+                      {page.erreurAnalyse && <Message variant="error" title={page.erreurAnalyse} />}
+                      {page.resultatAnalyse && <ResultatCoherence resultat={page.resultatAnalyse} />}
+                    </div>
+                  </section>
+                </Surface>
+              </div>
             </>
           )}
-          <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
+          {(page.erreurChargement || !page.attestation || !page.demande) && (
+            <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
+          )}
         </div>
       </MainContainer>
       {page.confirmationOuverte && (

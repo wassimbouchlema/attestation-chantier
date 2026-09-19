@@ -40,6 +40,7 @@ export const InterventionSection = ({
             label="Description des travaux"
             labelPosition="top"
             required
+            rows={6}
             {...register("intervention_description")}
             message={errors.intervention_description?.message}
             forceDisplayMessage={Boolean(errors.intervention_description)}

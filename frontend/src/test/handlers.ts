@@ -157,3 +157,17 @@ export const handlers = [
   // normal) : les tests qui en créent un le remplacent via server.use().
   http.get("*/demandes/:id/projet-attestation/", () => new HttpResponse(null, { status: 404 })),
 ];
+
+const COMMUNES_TEST = [
+  { nom: "Paris", codesPostaux: ["75001", "75002"] },
+  { nom: "Lyon", codesPostaux: ["69001"] },
+  { nom: "Saint-Denis", codesPostaux: ["93200"] },
+  { nom: "Saint-Denis", codesPostaux: ["97400"] },
+];
+
+export const communesHandlers = [
+  http.get("https://geo.api.gouv.fr/communes", ({ request }) => {
+    const nom = (new URL(request.url).searchParams.get("nom") ?? "").toLowerCase();
+    return HttpResponse.json(COMMUNES_TEST.filter((commune) => commune.nom.toLowerCase().includes(nom)));
+  }),
+];
