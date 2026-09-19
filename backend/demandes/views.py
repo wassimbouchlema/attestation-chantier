@@ -1,3 +1,4 @@
+import mimetypes
 from datetime import timedelta
 
 from django.core.files.base import ContentFile
@@ -13,7 +14,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from comptes.permissions import IsDistributeur
+from comptes.permissions import IsDistributeur, IsSiege
 from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_unique
 
 from .evaluation_risque import calculer_evaluation_risque
@@ -418,6 +419,56 @@ class DemandeViewSet(
         )
 
 
+class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Route dédiée plutôt qu'une adaptation de `DemandeViewSet` (ownership,
+    mutations) : le SIÈGE ne peut jamais atteindre une action de mutation
+    DISTRIBUTEUR depuis cet espace."""
+
+    permission_classes = [IsSiege]
+    serializer_class = DemandeDetailSerializer
+    lookup_value_converter = "uuid"
+    pagination_class = DemandePagination
+
+    def get_queryset(self):
+        return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
+
+    @action(detail=True, methods=["get"], url_path="pieces")
+    def pieces(self, request, pk=None):
+        demande = self.get_object()
+        pieces = demande.pieces.all()
+        pieces_requises = calculer_pieces_requises(demande.fdr)
+        pieces_presentes = {piece.type_piece for piece in pieces}
+        pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
+
+        return Response(
+            {
+                "pieces": PieceJustificativeSerializer(pieces, many=True).data,
+                "pieces_requises": pieces_requises,
+                "pieces_manquantes": pieces_manquantes,
+                "dossier_complet": not pieces_manquantes,
+            }
+        )
+
+    @action(detail=True, methods=["get"], url_path="evaluation-risque")
+    def evaluation_risque(self, request, pk=None):
+        demande = self.get_object()
+        serializer = EvaluationRisqueSerializer(calculer_evaluation_risque(demande.fdr))
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="fdr-pdf")
+    def fdr_pdf(self, request, pk=None):
+        demande = self.get_object()
+        if not demande.fdr_pdf:
+            return Response({"detail": "Aucun document généré pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(
+            demande.fdr_pdf.open("rb"),
+            content_type="application/pdf",
+            as_attachment=False,
+            filename=f"FDR-{demande.id}.pdf",
+        )
+
+
 class PieceJustificativeViewSet(viewsets.GenericViewSet):
     permission_classes = [IsDistributeur]
     serializer_class = PieceJustificativeSerializer
@@ -473,6 +524,29 @@ class PieceJustificativeViewSet(viewsets.GenericViewSet):
         piece.fichier.delete(save=False)
         piece.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SiegePieceJustificativeViewSet(viewsets.GenericViewSet):
+    """Aucune URL publique/MEDIA_URL : le fichier ne transite que par ce
+    FileResponse authentifié, après vérification que la pièce appartient
+    bien à la demande demandée (jamais un simple `pk=piece_id`)."""
+
+    permission_classes = [IsSiege]
+    serializer_class = PieceJustificativeSerializer
+
+    def fichier(self, request, demande_id=None, piece_id=None):
+        demande = get_object_or_404(
+            Demande.objects.filter(statut=StatutDemande.EN_COURS), pk=demande_id
+        )
+        piece = get_object_or_404(PieceJustificative, pk=piece_id, demande=demande)
+
+        content_type, _ = mimetypes.guess_type(piece.nom_fichier_original)
+        return FileResponse(
+            piece.fichier.open("rb"),
+            content_type=content_type or "application/octet-stream",
+            as_attachment=False,
+            filename=piece.nom_fichier_original,
+        )
 
 
 class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

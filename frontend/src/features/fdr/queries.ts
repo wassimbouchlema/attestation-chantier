@@ -38,10 +38,11 @@ export const useMettreAJourFdr = (demandeId: string) => {
   });
 };
 
-export const usePieces = (demandeId: string) => {
+/** `basePath` optionnel : `undefined` (DISTRIBUTEUR, comportement inchangé) ou `/siege/demandes` (SIÈGE, lecture seule). */
+export const usePieces = (demandeId: string, basePath?: string) => {
   return useQuery({
-    queryKey: piecesKeys.deDemande(demandeId),
-    queryFn: ({ signal }) => recupererPieces(demandeId, signal),
+    queryKey: basePath ? [...piecesKeys.deDemande(demandeId), basePath] : piecesKeys.deDemande(demandeId),
+    queryFn: ({ signal }) => recupererPieces(demandeId, signal, basePath),
   });
 };
 
@@ -66,10 +67,13 @@ export const useSupprimerPiece = (demandeId: string) => {
   });
 };
 
-export const useEvaluationRisque = (demandeId: string) => {
+/** `basePath` optionnel : `undefined` (DISTRIBUTEUR, comportement inchangé) ou `/siege/demandes` (SIÈGE, lecture seule). */
+export const useEvaluationRisque = (demandeId: string, basePath?: string) => {
   return useQuery({
-    queryKey: evaluationRisqueKeys.deDemande(demandeId),
-    queryFn: ({ signal }) => recupererEvaluationRisque(demandeId, signal),
+    queryKey: basePath
+      ? [...evaluationRisqueKeys.deDemande(demandeId), basePath]
+      : evaluationRisqueKeys.deDemande(demandeId),
+    queryFn: ({ signal }) => recupererEvaluationRisque(demandeId, signal, basePath),
   });
 };
 

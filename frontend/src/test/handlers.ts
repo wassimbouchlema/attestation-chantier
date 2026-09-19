@@ -1,8 +1,9 @@
 import { http, HttpResponse } from "msw";
 
 import type { Utilisateur } from "../api/auth";
-import type { Demande, DemandesPaginees, FormulaireRisqueApi } from "../api/demandes";
+import type { Demande, DemandesPaginees, DemandesPagineesDetail, FormulaireRisqueApi } from "../api/demandes";
 import type { EvaluationRisqueApi } from "../api/evaluationRisque";
+import type { NotificationsResponseApi } from "../api/notifications";
 import type { PiecesResponseApi } from "../api/pieces";
 
 export const UTILISATEUR_DISTRIBUTEUR: Utilisateur = {
@@ -62,6 +63,19 @@ export const handlers = [
       return new HttpResponse(null, { status: 401 });
     }
     return HttpResponse.json({ access });
+  }),
+
+  // Placés AVANT les handlers /demandes/ ci-dessous : leur préfixe `*` matcherait
+  // aussi ces URLs (`/siege/demandes/...` contient `/demandes/...`), et MSW
+  // retient le premier handler qui matche.
+  http.get("*/siege/demandes/", () => {
+    const reponse: DemandesPagineesDetail = { count: 0, next: null, previous: null, results: [] };
+    return HttpResponse.json(reponse);
+  }),
+
+  http.get("*/notifications/", () => {
+    const reponse: NotificationsResponseApi = { non_vues: 0, notifications: [] };
+    return HttpResponse.json(reponse);
   }),
 
   // Handlers par défaut "neutres" pour /demandes/ : les tests qui inspectent

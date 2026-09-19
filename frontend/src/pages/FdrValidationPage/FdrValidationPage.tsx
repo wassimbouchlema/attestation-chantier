@@ -52,7 +52,7 @@ export const FdrValidationPage = () => {
       )}
 
       <RecapitulatifFdr fdr={fdr} />
-      <SyntheseDossierPieces demandeId={demande.id} onRetourPieces={lectureSeule ? undefined : retourner} />
+      <SyntheseDossierPieces demandeId={demande.id} afficherTableau onRetourPieces={lectureSeule ? undefined : retourner} />
       <SyntheseRisque demandeId={demande.id} />
 
       <Surface>

@@ -55,6 +55,15 @@ describe("AppRouter — résolution rôle -> accueil", () => {
     expect(await screen.findByRole("heading", { name: /Demandes à traiter/ })).toBeInTheDocument();
   });
 
+  it("redirige l'ancienne route projet SIÈGE vers l'accueil SIÈGE", async () => {
+    seedSession("SIEGE");
+    irVers("/siege/demandes/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/projet-attestation");
+    renderAppRouter();
+
+    expect(await screen.findByRole("heading", { name: /Demandes à traiter/ })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/siege");
+  });
+
   it("une route inconnue redirige aussi vers l'espace du rôle connecté", async () => {
     seedSession("DISTRIBUTEUR");
     irVers("/une-route-qui-n-existe-pas");

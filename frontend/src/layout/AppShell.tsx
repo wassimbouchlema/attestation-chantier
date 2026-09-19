@@ -3,6 +3,7 @@ import logoAxa from "@axa-fr/canopee-css/logo-axa.svg";
 import type { ReactNode } from "react";
 
 import type { Role } from "../api/auth";
+import { ClocheNotifications } from "../features/notifications/components/ClocheNotifications/ClocheNotifications";
 import "./AppShell.css";
 import { useAppShell } from "./useAppShell";
 
@@ -38,11 +39,14 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           }}
         />
         {utilisateur && (
-          <User name={nomComplet} profile={LIBELLE_ROLE[utilisateur.role]}>
-            <Button variant="ghost" className="user-logout-action" onClick={deconnecter}>
-              Déconnexion
-            </Button>
-          </User>
+          <div className="app-shell__zone-utilisateur">
+            {utilisateur.role === "SIEGE" && <ClocheNotifications />}
+            <User name={nomComplet} profile={LIBELLE_ROLE[utilisateur.role]}>
+              <Button variant="ghost" className="user-logout-action" onClick={deconnecter}>
+                Déconnexion
+              </Button>
+            </User>
+          </div>
         )}
       </Header>
       <div id={ID_CONTENU_PRINCIPAL} ref={contenuRef} tabIndex={-1} className="app-shell__body">

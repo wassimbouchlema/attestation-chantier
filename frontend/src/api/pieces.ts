@@ -24,9 +24,14 @@ export interface PiecesResponseApi {
   dossier_complet: boolean;
 }
 
-export const recupererPieces = async (demandeId: string, signal?: AbortSignal): Promise<PiecesResponseApi> => {
+/** `basePath` : `/demandes` (DISTRIBUTEUR, défaut) ou `/siege/demandes` (SIÈGE, lecture seule). */
+export const recupererPieces = async (
+  demandeId: string,
+  signal?: AbortSignal,
+  basePath: string = "/demandes",
+): Promise<PiecesResponseApi> => {
   const messageIndisponible = "Impossible de récupérer les pièces justificatives.";
-  const response = await requeteAuthentifiee(`/demandes/${demandeId}/pieces/`, { signal });
+  const response = await requeteAuthentifiee(`${basePath}/${demandeId}/pieces/`, { signal });
   if (!response.ok) {
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
@@ -53,6 +58,19 @@ export const uploaderPiece = async (
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
   return lireJson<PieceJustificativeApi>(response, messageIndisponible);
+};
+
+/**
+ * `GET /siege/demandes/{demandeId}/pieces/{pieceId}/fichier/` — pas d'équivalent
+ * DISTRIBUTEUR (il a déposé le fichier lui-même), pas de MEDIA_URL public.
+ */
+export const recupererFichierPieceSiege = async (demandeId: string, pieceId: string): Promise<Blob> => {
+  const messageIndisponible = "Impossible de récupérer ce fichier.";
+  const response = await requeteAuthentifiee(`/siege/demandes/${demandeId}/pieces/${pieceId}/fichier/`);
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return response.blob();
 };
 
 export const supprimerPiece = async (demandeId: string, pieceId: string): Promise<void> => {

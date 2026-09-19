@@ -8,6 +8,14 @@
   margin-left: 1ch;
 }
 
+/* Regroupe cloche + User dans la même zone flex, à droite du Name (order: 1, Canopée). */
+.app-shell__zone-utilisateur {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  order: 2;
+}
+
 /* Lien d'évitement : premier élément focusable du shell, invisible tant
  * qu'il n'a pas le focus clavier, pour atteindre le contenu sans repasser
  * par toute la navigation du Header à chaque page. */

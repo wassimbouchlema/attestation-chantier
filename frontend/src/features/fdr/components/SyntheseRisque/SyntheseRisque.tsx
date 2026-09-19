@@ -4,8 +4,8 @@ import { Surface } from "../../../../layout/Surface";
 import { LIBELLE_NIVEAU_RISQUE } from "../../constants/niveauRisqueLabel";
 import { useEvaluationRisqueSection } from "../EvaluationRisqueSection/useEvaluationRisqueSection";
 
-export const SyntheseRisque = ({ demandeId }: { demandeId: string }) => {
-  const { isLoading, erreurChargement, reessayerChargement, resultat } = useEvaluationRisqueSection(demandeId);
+export const SyntheseRisque = ({ demandeId, basePath }: { demandeId: string; basePath?: string }) => {
+  const { isLoading, erreurChargement, reessayerChargement, resultat } = useEvaluationRisqueSection(demandeId, basePath);
 
   return (
     <Surface>

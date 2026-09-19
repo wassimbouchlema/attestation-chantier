@@ -1,8 +1,8 @@
 import { messageErreurAffichable } from "../../../demandes/helpers/messageErreur";
 import { usePieces } from "../../queries";
 
-export const useSyntheseDossierPieces = (demandeId: string) => {
-  const piecesQuery = usePieces(demandeId);
+export const useSyntheseDossierPieces = (demandeId: string, basePath?: string) => {
+  const piecesQuery = usePieces(demandeId, basePath);
 
   return {
     isLoading: piecesQuery.isLoading,

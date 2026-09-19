@@ -10,12 +10,14 @@ export interface EvaluationRisqueApi {
   synthese: string;
 }
 
+/** `basePath` : `/demandes` (DISTRIBUTEUR, défaut) ou `/siege/demandes` (SIÈGE, lecture seule). */
 export const recupererEvaluationRisque = async (
   demandeId: string,
   signal?: AbortSignal,
+  basePath: string = "/demandes",
 ): Promise<EvaluationRisqueApi> => {
   const messageIndisponible = "Impossible de récupérer l'évaluation du risque.";
-  const response = await requeteAuthentifiee(`/demandes/${demandeId}/evaluation-risque/`, { signal });
+  const response = await requeteAuthentifiee(`${basePath}/${demandeId}/evaluation-risque/`, { signal });
   if (!response.ok) {
     throw new ErreurReseauOuServeur(messageIndisponible);
   }

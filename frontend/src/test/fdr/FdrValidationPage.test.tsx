@@ -193,6 +193,50 @@ describe("FdrValidationPage — chargement du récapitulatif", () => {
 });
 
 describe("FdrValidationPage — pièces justificatives (synthèse de contrôle)", () => {
+  it("affiche les catégories et noms des pièces transmises dans un tableau readonly", async () => {
+    mockDemande(demandeApi());
+    mockPieces({
+      ...PIECES_COMPLETES,
+      pieces: [
+        {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          type_piece: "structure",
+          nom_fichier_original: "etude-structure.pdf",
+          uploaded_at: "2026-09-12T10:30:00Z",
+        },
+        {
+          id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          type_piece: "usage",
+          nom_fichier_original: "notice-usage.pdf",
+          uploaded_at: "2026-09-12T11:30:00Z",
+        },
+      ],
+    });
+    mockEvaluationRisque(EVALUATION);
+    renderWizard();
+
+    const tableau = within(await screen.findByRole("table"));
+    expect(tableau.getByRole("columnheader", { name: "Catégorie" })).toBeVisible();
+    expect(tableau.getByRole("columnheader", { name: "Fichier" })).toBeVisible();
+    expect(tableau.getByRole("cell", { name: "etude-structure.pdf" })).toBeVisible();
+    expect(tableau.getByRole("cell", { name: "notice-usage.pdf" })).toBeVisible();
+    expect(
+      within(tableau.getByRole("row", { name: /etude-structure.pdf/ })).getByRole("cell", {
+        name: "Justificatif lié à la modification de structure",
+      }),
+    ).toBeVisible();
+    expect(
+      within(tableau.getByRole("row", { name: /notice-usage.pdf/ })).getByRole("cell", {
+        name: "Justificatif lié à l'usage du chantier",
+      }),
+    ).toBeVisible();
+    expect(tableau.queryByRole("columnheader", { name: "Actions" })).not.toBeInTheDocument();
+    expect(tableau.queryByRole("button")).not.toBeInTheDocument();
+    expect(tableau.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Justificatif/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Supprimer|Prévisualiser|Télécharger/ })).not.toBeInTheDocument();
+  });
+
   it("dossier complet : Tag 'Complet', aucune liste de manquants, aucun bouton de retour", async () => {
     mockDemande(demandeApi());
     mockPieces(PIECES_COMPLETES);

@@ -1,0 +1,102 @@
+.cloche-notifications {
+  position: relative;
+}
+
+.cloche-notifications__trigger {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0.5rem;
+  position: relative;
+}
+
+.cloche-notifications__icone {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+.cloche-notifications__badge {
+  position: absolute;
+  right: -0.25rem;
+  top: -0.25rem;
+}
+
+.cloche-notifications__panneau {
+  background-color: var(--white);
+  border-radius: 4px;
+  box-shadow: 0 0 0.5625rem 0 rgba(0, 0, 0, 0.18);
+  max-height: min(34rem, 80vh);
+  overflow-y: auto;
+  /* `top`/`right` calculés en JS (voir useClocheNotifications). */
+  position: fixed;
+  /* Au-dessus de .af-title-bar--sticky (Canopée, z-index: 110). */
+  z-index: 120;
+  width: min(24rem, calc(100vw - 2rem));
+}
+
+.cloche-notifications__titre {
+  border-bottom: 0.0625rem solid var(--gray40);
+  font-weight: 700;
+  margin: 0;
+  padding: 0.75rem 1rem;
+}
+
+.cloche-notifications__vide {
+  color: var(--gray60);
+  padding: 1rem;
+}
+
+.cloche-notifications__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cloche-notifications__item {
+  background: none;
+  border: none;
+  border-bottom: 0.0625rem solid var(--gray40);
+  cursor: pointer;
+  display: block;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  width: 100%;
+}
+.cloche-notifications__item:hover,
+.cloche-notifications__item:focus-visible {
+  background-color: var(--gray10);
+}
+.cloche-notifications__liste li:last-child .cloche-notifications__item {
+  border-bottom: none;
+}
+
+.cloche-notifications__item-nouveau {
+  margin-bottom: 0.25rem;
+}
+
+.cloche-notifications__item-titre {
+  font-weight: 700;
+}
+
+.cloche-notifications__item-date {
+  color: var(--gray60);
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+}
+
+.cloche-notifications__afficher-plus {
+  background: none;
+  border: none;
+  color: var(--axablue80);
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  width: 100%;
+}
+.cloche-notifications__afficher-plus:hover,
+.cloche-notifications__afficher-plus:focus-visible {
+  background-color: var(--gray10);
+}

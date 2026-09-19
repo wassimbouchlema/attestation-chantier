@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 
 import { AssureSection } from "../../features/fdr/components/AssureSection/AssureSection";
 import { ChantierSection } from "../../features/fdr/components/ChantierSection/ChantierSection";
+import { FdrStepper } from "../../features/fdr/components/FdrStepper/FdrStepper";
 import { InterventionSection } from "../../features/fdr/components/InterventionSection/InterventionSection";
 import { QuestionsMetierSection } from "../../features/fdr/components/QuestionsMetierSection/QuestionsMetierSection";
 import { UsageCalendrierSection } from "../../features/fdr/components/UsageCalendrierSection/UsageCalendrierSection";
@@ -45,6 +46,9 @@ export const FdrNouvelleDemandePage = () => {
         title="Nouvelle demande d'attestation"
         actions={<Link to="/distributeur">Retour à mes demandes</Link>}
       />
+      <div className="af-container">
+        <FdrStepper />
+      </div>
       <MainContainer>
         <div className="container app-shell__content">
           {messageGlobal && (

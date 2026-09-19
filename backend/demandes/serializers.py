@@ -105,9 +105,13 @@ class FormulaireRisqueSerializer(serializers.ModelSerializer):
 
 class DemandeDetailSerializer(DemandeSerializer):
     fdr = FormulaireRisqueSerializer(read_only=True)
+    distributeur_nom = serializers.SerializerMethodField()
 
     class Meta(DemandeSerializer.Meta):
-        fields = DemandeSerializer.Meta.fields + ["commentaire_distributeur", "fdr"]
+        fields = DemandeSerializer.Meta.fields + ["commentaire_distributeur", "fdr", "distributeur_nom"]
+
+    def get_distributeur_nom(self, demande):
+        return demande.distributeur.get_full_name() or demande.distributeur.get_username()
 
 
 class CommentaireDistributeurSerializer(serializers.ModelSerializer):

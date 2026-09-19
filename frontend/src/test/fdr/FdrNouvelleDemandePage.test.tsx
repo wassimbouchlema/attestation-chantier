@@ -71,6 +71,18 @@ beforeEach(() => {
   seedSession("DISTRIBUTEUR");
 });
 
+describe("FdrNouvelleDemandePage — stepper global", () => {
+  it("affiche les 3 étapes du wizard, Informations active", async () => {
+    renderPage();
+    await screen.findByLabelText("Nom / raison sociale");
+
+    expect(screen.getByText("Informations")).toBeInTheDocument();
+    expect(screen.getByText("Pièces & risque")).toBeInTheDocument();
+    expect(screen.getByText("Validation & envoi")).toBeInTheDocument();
+    expect(screen.getByText("Informations").closest("li")?.className).toContain("on");
+  });
+});
+
 describe("FdrNouvelleDemandePage — montage sans effet de bord", () => {
   it("le montage du formulaire n'envoie aucun POST /demandes/", async () => {
     let appelsPost = 0;

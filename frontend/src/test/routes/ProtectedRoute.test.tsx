@@ -1,35 +1,39 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { AuthProvider } from "../../features/auth/AuthProvider";
+import { createQueryClient } from "../../queryClient";
 import { ProtectedRoute } from "../../routes/ProtectedRoute";
 import { seedSession } from "../utils";
 
 const renderDepuis = (chemin: string) => {
   return render(
     <AuthProvider>
-      <MemoryRouter initialEntries={[chemin]}>
-        <Routes>
-          <Route path="/login" element={<p>Page de connexion</p>} />
-          <Route
-            path="/distributeur"
-            element={
-              <ProtectedRoute roleRequis="DISTRIBUTEUR">
-                <p>Espace distributeur</p>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/siege"
-            element={
-              <ProtectedRoute roleRequis="SIEGE">
-                <p>Espace siège</p>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <QueryClientProvider client={createQueryClient()}>
+        <MemoryRouter initialEntries={[chemin]}>
+          <Routes>
+            <Route path="/login" element={<p>Page de connexion</p>} />
+            <Route
+              path="/distributeur"
+              element={
+                <ProtectedRoute roleRequis="DISTRIBUTEUR">
+                  <p>Espace distributeur</p>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/siege"
+              element={
+                <ProtectedRoute roleRequis="SIEGE">
+                  <p>Espace siège</p>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
     </AuthProvider>,
   );
 };

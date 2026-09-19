@@ -61,10 +61,14 @@ export interface FormulaireRisqueApi {
   travaux_standards: boolean | null;
 }
 
-/** Forme renvoyée par `GET /demandes/{id}/` (DemandeDetailSerializer) : la Demande avec son FDR imbriqué en lecture seule. */
+/**
+ * Forme renvoyée par `GET /demandes/{id}/` (DemandeDetailSerializer).
+ * `distributeur_nom` reste optionnel côté type malgré son envoi systématique : seul le SIÈGE l'affiche.
+ */
 export interface DemandeDetail extends Demande {
   commentaire_distributeur: string;
   fdr: FormulaireRisqueApi;
+  distributeur_nom?: string;
 }
 
 export interface DemandesPaginees {
@@ -72,6 +76,14 @@ export interface DemandesPaginees {
   next: string | null;
   previous: string | null;
   results: Demande[];
+}
+
+/** `GET /siege/demandes/` : liste déjà filtrée EN_COURS côté backend, avec le FDR imbriqué (utile à l'affichage du tableau SIÈGE : assuré, chantier). */
+export interface DemandesPagineesDetail {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: DemandeDetail[];
 }
 
 /** La demande ciblée n'existe pas ou n'appartient pas à l'utilisateur connecté (404). */
@@ -118,9 +130,14 @@ export const listerDemandes = async (
   return lireJson<DemandesPaginees>(response, messageIndisponible);
 };
 
-export const recupererDemande = async (id: string, signal?: AbortSignal): Promise<DemandeDetail> => {
+/** `basePath` : `/demandes` (DISTRIBUTEUR, défaut) ou `/siege/demandes` (SIÈGE, lecture seule). */
+export const recupererDemande = async (
+  id: string,
+  signal?: AbortSignal,
+  basePath: string = "/demandes",
+): Promise<DemandeDetail> => {
   const messageIndisponible = "Impossible de récupérer cette demande.";
-  const response = await requeteAuthentifiee(`/demandes/${id}/`, { signal });
+  const response = await requeteAuthentifiee(`${basePath}/${id}/`, { signal });
   if (response.status === 404) {
     throw new ErreurDemandeIntrouvable("Cette demande est introuvable.");
   }
@@ -128,6 +145,25 @@ export const recupererDemande = async (id: string, signal?: AbortSignal): Promis
     throw new ErreurReseauOuServeur(messageIndisponible);
   }
   return lireJson<DemandeDetail>(response, messageIndisponible);
+};
+
+/** `GET /siege/demandes/` — toujours EN_COURS (filtré côté backend), aucun paramètre `statut` côté SIÈGE. */
+export const listerDemandesSiege = async (
+  page: number,
+  signal?: AbortSignal,
+): Promise<DemandesPagineesDetail> => {
+  const messageIndisponible = "Impossible de récupérer les demandes à traiter.";
+  const params = new URLSearchParams();
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+  const queryString = params.toString();
+
+  const response = await requeteAuthentifiee(`/siege/demandes/${queryString ? `?${queryString}` : ""}`, { signal });
+  if (!response.ok) {
+    throw new ErreurReseauOuServeur(messageIndisponible);
+  }
+  return lireJson<DemandesPagineesDetail>(response, messageIndisponible);
 };
 
 /**
@@ -288,9 +324,10 @@ export const relancerDemande = async (demandeId: string): Promise<DemandeDetail>
   return lireJson<DemandeDetail>(response, messageIndisponible);
 };
 
-export const recupererFdrPdf = async (demandeId: string): Promise<Blob> => {
+/** `basePath` : `/demandes` (DISTRIBUTEUR, défaut) ou `/siege/demandes` (SIÈGE, lecture seule). */
+export const recupererFdrPdf = async (demandeId: string, basePath: string = "/demandes"): Promise<Blob> => {
   const messageIndisponible = "Impossible de récupérer le document PDF.";
-  const response = await requeteAuthentifiee(`/demandes/${demandeId}/fdr-pdf/`);
+  const response = await requeteAuthentifiee(`${basePath}/${demandeId}/fdr-pdf/`);
   if (response.status === 404) {
     throw new ErreurReseauOuServeur("Aucun document n'est disponible pour cette demande.");
   }

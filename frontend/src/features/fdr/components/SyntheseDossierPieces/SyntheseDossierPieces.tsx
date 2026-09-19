@@ -1,5 +1,7 @@
 import { Button, Loader, Restitution, Table, TBody, Td, Th, THead, Title, Tag, Tr } from "@axa-fr/canopee-react/distributeur";
+import type { ReactNode } from "react";
 
+import type { PieceJustificativeApi } from "../../../../api/pieces";
 import { formatDate } from "../../../../helpers/formatDate";
 import { Surface } from "../../../../layout/Surface";
 import { LIBELLE_CATEGORIE_PIECE } from "../../constants/pieceLabel";
@@ -9,13 +11,19 @@ export const SyntheseDossierPieces = ({
   demandeId,
   afficherTableau = false,
   onRetourPieces,
+  basePath,
+  actionsPiece,
 }: {
   demandeId: string;
   afficherTableau?: boolean;
   onRetourPieces?: () => void;
+  /** `undefined` (DISTRIBUTEUR, défaut) ou `/siege/demandes` (SIÈGE, lecture seule). */
+  basePath?: string;
+  /** Colonne "Actions" par pièce, optionnelle (ex. Prévisualiser/Télécharger, SIÈGE) — absente côté DISTRIBUTEUR. */
+  actionsPiece?: (piece: PieceJustificativeApi) => ReactNode;
 }) => {
   const { isLoading, erreurChargement, reessayerChargement, dossierCharge, dossierComplet, piecesRequises, piecesManquantes, pieces } =
-    useSyntheseDossierPieces(demandeId);
+    useSyntheseDossierPieces(demandeId, basePath);
 
   return (
     <Surface>
@@ -65,6 +73,7 @@ export const SyntheseDossierPieces = ({
                   <Th scope="col">Catégorie</Th>
                   <Th scope="col">Fichier</Th>
                   <Th scope="col">Date d'ajout</Th>
+                  {actionsPiece && <Th scope="col">Actions</Th>}
                 </Tr>
               </THead>
               <TBody>
@@ -73,6 +82,7 @@ export const SyntheseDossierPieces = ({
                     <Td>{LIBELLE_CATEGORIE_PIECE[piece.type_piece]}</Td>
                     <Td>{piece.nom_fichier_original}</Td>
                     <Td>{formatDate(piece.uploaded_at)}</Td>
+                    {actionsPiece && <Td>{actionsPiece(piece)}</Td>}
                   </Tr>
                 ))}
               </TBody>
