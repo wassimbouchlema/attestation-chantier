@@ -1,17 +1,8 @@
-from pathlib import Path
-
 from rest_framework import serializers
 
-from .evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
-from .html_sanitization import nettoyer_html
-from .models import (
-    Demande, DemandeComplement, FormulaireRisque, Notification,
-    PieceJustificative, ProjetAttestation, TypeChantier, Usage,
-)
-from .rules import TYPES_PIECES_AUTORISES
-
-EXTENSIONS_PIECES_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
-CONTENT_TYPES_PIECES_AUTORISES = {"application/pdf", "image/jpeg", "image/png"}
+from ..evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
+from ..models import Demande, FormulaireRisque, TypeChantier, Usage
+from .siege import DemandeComplementSerializer
 
 
 class DemandeSerializer(serializers.ModelSerializer):
@@ -94,31 +85,13 @@ class FormulaireRisqueSerializer(serializers.ModelSerializer):
                 }
             )
 
-        # Normalisation : modification_structure n'a de sens que si le chantier est une rénovation.
-        # Un changement de type_chantier qui invalide une réponse déjà donnée (ou une réponse envoyée
-        # alors que le chantier n'est pas une rénovation) est silencieusement remis à null plutôt que
-        # rejeté : ce n'est pas une erreur de saisie, juste une donnée devenue sans objet.
+        # Un changement de type rend la réponse sans objet plutôt qu'invalide.
         type_chantier = self._valeur_finale(attrs, "type_chantier")
         modification_structure = self._valeur_finale(attrs, "modification_structure")
         if type_chantier != TypeChantier.RENOVATION and modification_structure is not None:
             attrs["modification_structure"] = None
 
         return attrs
-
-
-class DemandeComplementSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DemandeComplement
-        fields = ["id", "message", "requested_at", "received_at"]
-        read_only_fields = fields
-
-
-class DemanderComplementsSerializer(serializers.Serializer):
-    message = serializers.CharField(trim_whitespace=True, allow_blank=False)
-
-
-class RefuserDemandeSerializer(serializers.Serializer):
-    motif = serializers.CharField(trim_whitespace=True, allow_blank=False)
 
 
 class DemandeDetailSerializer(DemandeSerializer):
@@ -141,80 +114,20 @@ class DemandeDetailSerializer(DemandeSerializer):
 
 
 class CommentaireDistributeurSerializer(serializers.ModelSerializer):
-    """Action ciblée `PATCH /demandes/{id}/commentaire/` — jamais un PATCH générique sur Demande."""
-
     class Meta:
         model = Demande
         fields = ["commentaire_distributeur"]
 
 
 class EnvoyerDemandeSerializer(serializers.Serializer):
-    """Entrée de `POST /demandes/{id}/envoyer/` : uniquement le commentaire courant,
-    optionnel. `statut`/`envoye_at`/`fdr_pdf` ne sont jamais writable depuis le frontend."""
-
     commentaire_distributeur = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=False
     )
 
 
-class PieceJustificativeSerializer(serializers.ModelSerializer):
-    type_piece = serializers.ChoiceField(choices=TYPES_PIECES_AUTORISES)
-
-    class Meta:
-        model = PieceJustificative
-        fields = ["id", "type_piece", "fichier", "nom_fichier_original", "uploaded_at"]
-        read_only_fields = ["id", "nom_fichier_original", "uploaded_at"]
-        extra_kwargs = {"fichier": {"write_only": True}}
-
-    def validate_fichier(self, fichier):
-        extension = Path(fichier.name).suffix.lower()
-        if extension not in EXTENSIONS_PIECES_AUTORISEES or (
-            fichier.content_type not in CONTENT_TYPES_PIECES_AUTORISES
-        ):
-            raise serializers.ValidationError(
-                "Type de fichier non autorisé (formats acceptés : PDF, JPG, PNG)."
-            )
-        return fichier
-
-    def create(self, validated_data):
-        # Le nom original ne sert qu'à l'affichage : basename seul (jamais un
-        # chemin fourni par le client), distinct du chemin de stockage réel
-        # généré par `chemin_upload_piece`.
-        validated_data["nom_fichier_original"] = Path(validated_data["fichier"].name).name
-        return super().create(validated_data)
-
-
 class EvaluationRisqueSerializer(serializers.Serializer):
-    """Sérialisation en lecture seule de `calculer_evaluation_risque` — introspection
-    OpenAPI uniquement, ne correspond à aucun modèle (rien n'est stocké en base)."""
-
     score = serializers.IntegerField(read_only=True)
     niveau = serializers.ChoiceField(
         choices=[NIVEAU_FAIBLE, NIVEAU_MODERE, NIVEAU_ELEVE], read_only=True
     )
     synthese = serializers.CharField(read_only=True)
-
-
-class NotificationSerializer(serializers.ModelSerializer):
-    demande_id = serializers.UUIDField(read_only=True)
-
-    class Meta:
-        model = Notification
-        fields = ["id", "type_notification", "titre", "message", "demande_id", "created_at", "seen_at"]
-        read_only_fields = fields
-
-
-class MarquerNotificationsVuesSerializer(serializers.Serializer):
-    ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=True)
-
-
-class ProjetAttestationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjetAttestation
-        fields = ["contenu_html", "created_at", "updated_at"]
-        read_only_fields = ["created_at", "updated_at"]
-
-    def validate_contenu_html(self, value):
-        # Seul point d'écriture de ce champ (PATCH) : le backend reste l'unique
-        # garde-fou, jamais une confiance dans une sanitization frontend seule.
-        return nettoyer_html(value)

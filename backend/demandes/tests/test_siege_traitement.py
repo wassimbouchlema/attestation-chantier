@@ -131,7 +131,7 @@ class SiegeTraitementTests(APITestCase):
     def test_echec_notification_annule_le_traitement(self):
         for action, donnees in (("demander-complements", {"message": "Texte"}), ("refuser", {"motif": "Texte"})):
             with self.subTest(action=action):
-                with patch("demandes.views.Notification.objects.create", side_effect=RuntimeError("Indisponible")):
+                with patch("demandes.views.siege.Notification.objects.create", side_effect=RuntimeError("Indisponible")):
                     with self.assertRaises(RuntimeError):
                         self.poster(action, donnees)
                 self.demande.refresh_from_db()

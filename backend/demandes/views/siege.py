@@ -1,0 +1,153 @@
+import mimetypes
+
+from django.db import transaction
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from comptes.permissions import IsSiege
+
+from ..evaluation_risque import calculer_evaluation_risque
+from ..models import (
+    DecisionDemande,
+    Demande,
+    DemandeComplement,
+    Notification,
+    PieceJustificative,
+    StatutDemande,
+    TypeNotification,
+)
+from ..rules import calculer_pieces_manquantes, calculer_pieces_requises
+from ..serializers import (
+    DemandeDetailSerializer,
+    DemanderComplementsSerializer,
+    EvaluationRisqueSerializer,
+    PieceJustificativeSerializer,
+    RefuserDemandeSerializer,
+)
+from .distributeur import DemandePagination
+
+
+class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    permission_classes = [IsSiege]
+    serializer_class = DemandeDetailSerializer
+    lookup_value_converter = "uuid"
+    pagination_class = DemandePagination
+
+    def get_queryset(self):
+        return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
+
+    def _conflit_traitement(self, demande):
+        if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
+            return Response(
+                {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if demande.complements.filter(received_at__isnull=True).exists():
+            return Response(
+                {
+                    "code": "COMPLEMENTS_DEJA_DEMANDES",
+                    "detail": "Des compléments sont déjà demandés. Attendez la réponse du distributeur.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return None
+
+    @action(detail=True, methods=["post"], url_path="demander-complements")
+    def demander_complements(self, request, pk=None):
+        entree = DemanderComplementsSerializer(data=request.data)
+        entree.is_valid(raise_exception=True)
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            message = entree.validated_data["message"]
+            DemandeComplement.objects.create(demande=demande, message=message)
+            Notification.objects.create(
+                destinataire=demande.distributeur,
+                demande=demande,
+                type_notification=TypeNotification.COMPLEMENTS_DEMANDES,
+                titre="Compléments demandés",
+                message=message,
+            )
+            return Response(self.get_serializer(demande).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="refuser")
+    def refuser(self, request, pk=None):
+        entree = RefuserDemandeSerializer(data=request.data)
+        entree.is_valid(raise_exception=True)
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            demande.decision = DecisionDemande.REFUSEE
+            demande.motif_refus = entree.validated_data["motif"]
+            demande.statut = StatutDemande.TRAITE
+            demande.save(update_fields=["decision", "motif_refus", "statut", "updated_at"])
+            Notification.objects.create(
+                destinataire=demande.distributeur,
+                demande=demande,
+                type_notification=TypeNotification.DEMANDE_REFUSEE,
+                titre="Demande refusée",
+                message=demande.motif_refus,
+            )
+            return Response(self.get_serializer(demande).data)
+
+    @action(detail=True, methods=["get"], url_path="pieces")
+    def pieces(self, request, pk=None):
+        demande = self.get_object()
+        pieces = demande.pieces.all()
+        pieces_requises = calculer_pieces_requises(demande.fdr)
+        pieces_presentes = {piece.type_piece for piece in pieces}
+        pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
+
+        return Response(
+            {
+                "pieces": PieceJustificativeSerializer(pieces, many=True).data,
+                "pieces_requises": pieces_requises,
+                "pieces_manquantes": pieces_manquantes,
+                "dossier_complet": not pieces_manquantes,
+            }
+        )
+
+    @action(detail=True, methods=["get"], url_path="evaluation-risque")
+    def evaluation_risque(self, request, pk=None):
+        demande = self.get_object()
+        serializer = EvaluationRisqueSerializer(calculer_evaluation_risque(demande.fdr))
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="fdr-pdf")
+    def fdr_pdf(self, request, pk=None):
+        demande = self.get_object()
+        if not demande.fdr_pdf:
+            return Response({"detail": "Aucun document généré pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(
+            demande.fdr_pdf.open("rb"),
+            content_type="application/pdf",
+            as_attachment=False,
+            filename=f"FDR-{demande.id}.pdf",
+        )
+
+
+class SiegePieceJustificativeViewSet(viewsets.GenericViewSet):
+    permission_classes = [IsSiege]
+    serializer_class = PieceJustificativeSerializer
+
+    def fichier(self, request, demande_id=None, piece_id=None):
+        demande = get_object_or_404(
+            Demande.objects.filter(statut=StatutDemande.EN_COURS), pk=demande_id
+        )
+        piece = get_object_or_404(PieceJustificative, pk=piece_id, demande=demande)
+
+        content_type, _ = mimetypes.guess_type(piece.nom_fichier_original)
+        return FileResponse(
+            piece.fichier.open("rb"),
+            content_type=content_type or "application/octet-stream",
+            as_attachment=False,
+            filename=piece.nom_fichier_original,
+        )

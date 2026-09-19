@@ -47,7 +47,7 @@ class RelanceDemandeEndpointTests(APITestCase):
         return reverse("demande-relancer", kwargs={"pk": (demande or self.demande).pk})
 
     def _figer_maintenant(self, instant):
-        return patch("demandes.views.timezone.now", return_value=instant)
+        return patch("demandes.views.distributeur.timezone.now", return_value=instant)
 
     # --- Succès ---
 
@@ -182,7 +182,7 @@ class RelanceDemandeEndpointTests(APITestCase):
     def test_echec_envoi_email_rollback_complet(self):
         self._authentifier(self.distributeur_a)
 
-        with patch("demandes.views.EmailMessage.send", side_effect=RuntimeError("SMTP indisponible")):
+        with patch("demandes.views.distributeur.EmailMessage.send", side_effect=RuntimeError("SMTP indisponible")):
             response = self.client.post(self._url(), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)

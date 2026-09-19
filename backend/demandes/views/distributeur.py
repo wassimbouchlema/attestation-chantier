@@ -1,4 +1,3 @@
-import mimetypes
 from datetime import timedelta
 
 from django.core.files.base import ContentFile
@@ -11,18 +10,15 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from comptes.permissions import IsDistributeur, IsSiege
+from comptes.permissions import IsDistributeur
 from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_unique
 
-from .evaluation_risque import calculer_evaluation_risque
-from .html_sanitization import nettoyer_html
-from .models import (
-    DecisionDemande,
+from ..evaluation_risque import calculer_evaluation_risque
+from ..html_sanitization import nettoyer_html
+from ..models import (
     Demande,
-    DemandeComplement,
     FormulaireRisque,
     Notification,
     PieceJustificative,
@@ -30,25 +26,21 @@ from .models import (
     StatutDemande,
     TypeNotification,
 )
-from .pdf import generer_pdf_fdr
-from .projet_attestation import generer_contenu_initial
-from .projet_attestation_pdf import generer_pdf
-from .rules import calculer_pieces_manquantes, calculer_pieces_requises
-from .serializers import (
+from ..pdf import generer_pdf_fdr
+from ..projet_attestation import generer_contenu_initial
+from ..projet_attestation_pdf import generer_pdf
+from ..rules import calculer_pieces_manquantes, calculer_pieces_requises
+from ..serializers import (
     CommentaireDistributeurSerializer,
     DemandeDetailSerializer,
     DemandeSerializer,
-    DemanderComplementsSerializer,
     EnvoyerDemandeSerializer,
     EvaluationRisqueSerializer,
     FormulaireRisqueSerializer,
-    MarquerNotificationsVuesSerializer,
-    NotificationSerializer,
     PieceJustificativeSerializer,
     ProjetAttestationSerializer,
-    RefuserDemandeSerializer,
 )
-from .validation_envoi import valider_fdr_pret_a_envoyer
+from ..validation_envoi import valider_fdr_pret_a_envoyer
 
 TITRE_DEMANDE_ENVOYEE = "Nouvelle demande reçue"
 MESSAGE_DEMANDE_ENVOYEE = "Une nouvelle demande d'attestation de chantier a été envoyée."
@@ -258,8 +250,7 @@ class DemandeViewSet(
                     message=MESSAGE_DEMANDE_ENVOYEE,
                 )
             except Exception:
-                # Nettoyage explicite du seul fichier créé pendant cette tentative :
-                # transaction.atomic() protège la DB, jamais le storage/filesystem.
+                # La transaction protège la base, pas le fichier créé pendant la tentative.
                 if demande.fdr_pdf:
                     demande.fdr_pdf.delete(save=False)
                 raise
@@ -323,10 +314,7 @@ class DemandeViewSet(
                 "Attestation de chantier"
             )
 
-            # L'email fait foi : `last_relance_at`/la notification ne sont
-            # enregistrés que s'il a réellement été envoyé par le backend
-            # configuré (fail_silently=False) — une exception de transport
-            # annule la transaction, aucune "fausse" relance n'est persistée.
+            # La persistance n'a lieu que si le transport confirme l'envoi.
             try:
                 EmailMessage(
                     subject="[Attestation de chantier] Relance d'une demande en cours",
@@ -391,7 +379,6 @@ class DemandeViewSet(
             )
             return Response(self.get_serializer(projet).data, status=status.HTTP_201_CREATED)
 
-        # PATCH
         projet = getattr(demande, "projet_attestation", None)
         if projet is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -407,9 +394,6 @@ class DemandeViewSet(
 
     @action(detail=True, methods=["get"], url_path="projet-attestation/pdf")
     def projet_attestation_pdf(self, request, pk=None):
-        """PDF rendu à la demande, jamais stocké : `contenu_html` reste la
-        seule source de vérité. Le corps repris est celui enregistré en base
-        (déjà sanitizé), jamais un HTML transmis par le client."""
         demande = self.get_object()
         projet = getattr(demande, "projet_attestation", None)
         if projet is None:
@@ -420,114 +404,6 @@ class DemandeViewSet(
             pdf,
             content_type="application/pdf",
             headers={"Content-Disposition": f'inline; filename="projet-attestation-{demande.id}.pdf"'},
-        )
-
-
-class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Route dédiée plutôt qu'une adaptation de `DemandeViewSet` (ownership,
-    mutations) : le SIÈGE ne peut jamais atteindre une action de mutation
-    DISTRIBUTEUR depuis cet espace."""
-
-    permission_classes = [IsSiege]
-    serializer_class = DemandeDetailSerializer
-    lookup_value_converter = "uuid"
-    pagination_class = DemandePagination
-
-    def get_queryset(self):
-        return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
-
-    def _conflit_traitement(self, demande):
-        if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
-            return Response(
-                {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
-                status=status.HTTP_409_CONFLICT,
-            )
-        if demande.complements.filter(received_at__isnull=True).exists():
-            return Response(
-                {
-                    "code": "COMPLEMENTS_DEJA_DEMANDES",
-                    "detail": "Des compléments sont déjà demandés. Attendez la réponse du distributeur.",
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-        return None
-
-    @action(detail=True, methods=["post"], url_path="demander-complements")
-    def demander_complements(self, request, pk=None):
-        entree = DemanderComplementsSerializer(data=request.data)
-        entree.is_valid(raise_exception=True)
-        with transaction.atomic():
-            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
-            conflit = self._conflit_traitement(demande)
-            if conflit is not None:
-                return conflit
-            message = entree.validated_data["message"]
-            DemandeComplement.objects.create(demande=demande, message=message)
-            Notification.objects.create(
-                destinataire=demande.distributeur,
-                demande=demande,
-                type_notification=TypeNotification.COMPLEMENTS_DEMANDES,
-                titre="Compléments demandés",
-                message=message,
-            )
-            return Response(self.get_serializer(demande).data, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=["post"], url_path="refuser")
-    def refuser(self, request, pk=None):
-        entree = RefuserDemandeSerializer(data=request.data)
-        entree.is_valid(raise_exception=True)
-        with transaction.atomic():
-            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
-            conflit = self._conflit_traitement(demande)
-            if conflit is not None:
-                return conflit
-            demande.decision = DecisionDemande.REFUSEE
-            demande.motif_refus = entree.validated_data["motif"]
-            demande.statut = StatutDemande.TRAITE
-            demande.save(update_fields=["decision", "motif_refus", "statut", "updated_at"])
-            Notification.objects.create(
-                destinataire=demande.distributeur,
-                demande=demande,
-                type_notification=TypeNotification.DEMANDE_REFUSEE,
-                titre="Demande refusée",
-                message=demande.motif_refus,
-            )
-            return Response(self.get_serializer(demande).data)
-
-    @action(detail=True, methods=["get"], url_path="pieces")
-    def pieces(self, request, pk=None):
-        demande = self.get_object()
-        pieces = demande.pieces.all()
-        pieces_requises = calculer_pieces_requises(demande.fdr)
-        pieces_presentes = {piece.type_piece for piece in pieces}
-        pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
-
-        return Response(
-            {
-                "pieces": PieceJustificativeSerializer(pieces, many=True).data,
-                "pieces_requises": pieces_requises,
-                "pieces_manquantes": pieces_manquantes,
-                "dossier_complet": not pieces_manquantes,
-            }
-        )
-
-    @action(detail=True, methods=["get"], url_path="evaluation-risque")
-    def evaluation_risque(self, request, pk=None):
-        demande = self.get_object()
-        serializer = EvaluationRisqueSerializer(calculer_evaluation_risque(demande.fdr))
-        return Response(serializer.data)
-
-    @action(detail=True, methods=["get"], url_path="fdr-pdf")
-    def fdr_pdf(self, request, pk=None):
-        demande = self.get_object()
-        if not demande.fdr_pdf:
-            return Response({"detail": "Aucun document généré pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
-
-        return FileResponse(
-            demande.fdr_pdf.open("rb"),
-            content_type="application/pdf",
-            as_attachment=False,
-            filename=f"FDR-{demande.id}.pdf",
         )
 
 
@@ -586,58 +462,3 @@ class PieceJustificativeViewSet(viewsets.GenericViewSet):
         piece.fichier.delete(save=False)
         piece.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class SiegePieceJustificativeViewSet(viewsets.GenericViewSet):
-    """Aucune URL publique/MEDIA_URL : le fichier ne transite que par ce
-    FileResponse authentifié, après vérification que la pièce appartient
-    bien à la demande demandée (jamais un simple `pk=piece_id`)."""
-
-    permission_classes = [IsSiege]
-    serializer_class = PieceJustificativeSerializer
-
-    def fichier(self, request, demande_id=None, piece_id=None):
-        demande = get_object_or_404(
-            Demande.objects.filter(statut=StatutDemande.EN_COURS), pk=demande_id
-        )
-        piece = get_object_or_404(PieceJustificative, pk=piece_id, demande=demande)
-
-        content_type, _ = mimetypes.guess_type(piece.nom_fichier_original)
-        return FileResponse(
-            piece.fichier.open("rb"),
-            content_type=content_type or "application/octet-stream",
-            as_attachment=False,
-            filename=piece.nom_fichier_original,
-        )
-
-
-class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    permission_classes = [IsAuthenticated]
-    serializer_class = NotificationSerializer
-
-    def get_queryset(self):
-        return Notification.objects.filter(destinataire=self.request.user)
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        non_vues = queryset.filter(seen_at__isnull=True).count()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({"non_vues": non_vues, "notifications": serializer.data})
-
-    @action(detail=False, methods=["post"], url_path="marquer-vues")
-    def marquer_vues(self, request):
-        entree = MarquerNotificationsVuesSerializer(data=request.data)
-        entree.is_valid(raise_exception=True)
-
-        # GET ne doit jamais avoir d'effet de bord (pas de seen_at=now() implicite
-        # au refetch/focus TanStack Query) : seule cette action batch marque des
-        # notifications comme vues, et strictement celles du demandeur — un id
-        # étranger fourni volontairement est silencieusement filtré, sans fuite
-        # d'information sur son existence/propriétaire réel.
-        nombre_marquees = Notification.objects.filter(
-            destinataire=request.user,
-            id__in=entree.validated_data["ids"],
-            seen_at__isnull=True,
-        ).update(seen_at=timezone.now())
-
-        return Response({"marquees": nombre_marquees}, status=status.HTTP_200_OK)
