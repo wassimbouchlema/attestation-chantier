@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import { TAILLE_PAGE, type StatutDemande } from "../../api/demandes";
+import { TAILLE_PAGE, type FiltreComplements, type FiltreDecision, type StatutDemande } from "../../api/demandes";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { parseFiltresListe } from "../../features/demandes/helpers/parseFiltresListe";
-import { useDemandes, useSupprimerDemande } from "../../features/demandes/queries";
+import { telechargerPdf } from "../../features/demandes/helpers/pdfActions";
+import { useDemandes, useSupprimerDemande, useTelechargerAttestationFinale } from "../../features/demandes/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
 interface EtatNavigationDistributeurHome {
@@ -30,24 +31,32 @@ export const useDistributeurHome = () => {
     }
   }, [etatNavigation?.successMessage, location.pathname, location.search, navigate]);
 
-  const { statut, page } = parseFiltresListe(searchParams);
-  const { data, isLoading, isError, error, refetch } = useDemandes({ statut, page });
+  const filtres = parseFiltresListe(searchParams);
+  const { page } = filtres;
+  const { data, isLoading, isError, error, refetch } = useDemandes(filtres);
   const supprimerDemandeMutation = useSupprimerDemande();
+  const attestationMutation = useTelechargerAttestationFinale();
 
   const demandes = data?.results ?? [];
   const total = data?.count ?? 0;
   const nombreDePages = Math.max(1, Math.ceil(total / TAILLE_PAGE));
 
-  const changerStatut = (nouveauStatut: StatutDemande | "") => {
+  const changerFiltre = (cle: "statut" | "decision" | "complements", valeur: string) => {
     setSearchParams((precedent) => {
       const suivant = new URLSearchParams(precedent);
-      if (nouveauStatut) {
-        suivant.set("statut", nouveauStatut);
+      if (valeur) {
+        suivant.set(cle, valeur);
       } else {
-        suivant.delete("statut");
+        suivant.delete(cle);
       }
       suivant.delete("page");
       return suivant;
+    });
+  };
+
+  const telechargerAttestation = (demandeId: string) => {
+    attestationMutation.mutate(demandeId, {
+      onSuccess: (blob) => telechargerPdf(blob, `attestation-definitive-${demandeId}.pdf`),
     });
   };
 
@@ -78,7 +87,8 @@ export const useDistributeurHome = () => {
   };
 
   return {
-    statutSelectionne: statut,
+    filtres,
+    aucunFiltre: !filtres.statut && !filtres.decision && !filtres.complements,
     page,
     nombreDePages,
     demandes,
@@ -87,8 +97,14 @@ export const useDistributeurHome = () => {
     fermerMessageSucces: () => setMessageSucces(null),
     erreurChargement: isError ? messageErreurAffichable(error) : null,
     reessayerChargement: () => refetch(),
-    changerStatut,
+    changerStatut: (statut: StatutDemande | "") => changerFiltre("statut", statut),
+    changerDecision: (decision: FiltreDecision | "") => changerFiltre("decision", decision),
+    changerComplements: (complements: FiltreComplements | "") => changerFiltre("complements", complements),
     changerPage,
+    telechargerAttestation,
+    attestationEnCours: attestationMutation.isPending,
+    erreurAttestation: attestationMutation.isError ? messageErreurAffichable(attestationMutation.error) : null,
+    fermerErreurAttestation: () => attestationMutation.reset(),
     creerDemande: () => navigate("/distributeur/demandes/nouvelle"),
 
     demandeASupprimer,

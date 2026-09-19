@@ -6,10 +6,21 @@ from .siege import DemandeComplementSerializer
 
 
 class DemandeSerializer(serializers.ModelSerializer):
+    attestation_finale = serializers.SerializerMethodField()
+
     class Meta:
         model = Demande
-        fields = ["id", "distributeur", "statut", "created_at", "updated_at", "envoye_at", "last_relance_at"]
+        fields = [
+            "id", "distributeur", "statut", "decision", "created_at", "updated_at", "envoye_at", "last_relance_at",
+            "attestation_finale",
+        ]
         read_only_fields = fields
+
+    def get_attestation_finale(self, demande):
+        attestation = getattr(demande, "attestation", None)
+        if demande.decision != DecisionDemande.ACCEPTEE or attestation is None or not attestation.pdf_final:
+            return None
+        return {"validated_at": attestation.validated_at}
 
 
 class FormulaireRisqueSerializer(serializers.ModelSerializer):
@@ -98,24 +109,16 @@ class DemandeDetailSerializer(DemandeSerializer):
     fdr = FormulaireRisqueSerializer(read_only=True)
     distributeur_nom = serializers.SerializerMethodField()
     complement_actif = serializers.SerializerMethodField()
-    attestation_finale = serializers.SerializerMethodField()
 
     class Meta(DemandeSerializer.Meta):
         fields = DemandeSerializer.Meta.fields + [
-            "commentaire_distributeur", "fdr", "distributeur_nom", "decision", "motif_refus", "complement_actif",
-            "attestation_finale",
+            "commentaire_distributeur", "fdr", "distributeur_nom", "motif_refus", "complement_actif",
         ]
         read_only_fields = fields
 
     def get_complement_actif(self, demande):
         complement = demande.complements.filter(received_at__isnull=True).first()
         return DemandeComplementSerializer(complement).data if complement else None
-
-    def get_attestation_finale(self, demande):
-        attestation = getattr(demande, "attestation", None)
-        if demande.decision != DecisionDemande.ACCEPTEE or attestation is None or not attestation.pdf_final:
-            return None
-        return {"validated_at": attestation.validated_at}
 
     def get_distributeur_nom(self, demande):
         return demande.distributeur.get_full_name() or demande.distributeur.get_username()

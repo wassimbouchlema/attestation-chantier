@@ -16,11 +16,16 @@ export { ErreurAuthentification, ErreurReseauOuServeur };
 export const TAILLE_PAGE = 10;
 
 export type StatutDemande = "BROUILLON" | "EN_COURS" | "TRAITE";
+export type DecisionDemande = "ACCEPTEE" | "REFUSEE";
+export type FiltreDecision = DecisionDemande | "EN_ATTENTE";
+export type FiltreComplements = "DEMANDES" | "AUCUN";
 
 export interface Demande {
   id: string;
   distributeur: number;
   statut: StatutDemande;
+  decision?: DecisionDemande | null;
+  attestation_finale?: { validated_at: string | null } | null;
   created_at: string;
   updated_at: string;
   envoye_at: string | null;
@@ -70,9 +75,7 @@ export interface DemandeDetail extends Demande {
   commentaire_distributeur: string;
   fdr: FormulaireRisqueApi;
   distributeur_nom?: string;
-  decision?: "ACCEPTEE" | "REFUSEE" | null;
   motif_refus?: string;
-  attestation_finale?: { validated_at: string | null } | null;
   complement_actif?: {
     id: string;
     message: string;
@@ -120,13 +123,24 @@ export class ErreurFdrInvalide extends Error {
 }
 
 export const listerDemandes = async (
-  filtres: { statut?: StatutDemande | ""; page?: number },
+  filtres: {
+    statut?: StatutDemande | "";
+    decision?: FiltreDecision | "";
+    complements?: FiltreComplements | "";
+    page?: number;
+  },
   signal?: AbortSignal,
 ): Promise<DemandesPaginees> => {
   const messageIndisponible = "Impossible de récupérer vos demandes.";
   const params = new URLSearchParams();
   if (filtres.statut) {
     params.set("statut", filtres.statut);
+  }
+  if (filtres.decision) {
+    params.set("decision", filtres.decision);
+  }
+  if (filtres.complements) {
+    params.set("complements", filtres.complements);
   }
   if (filtres.page && filtres.page > 1) {
     params.set("page", String(filtres.page));

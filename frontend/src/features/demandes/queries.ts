@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { recupererAttestationFinalePdf } from "../../api/attestation";
 import {
   creerDemandeAvecFdr,
   listerDemandes,
@@ -9,18 +10,18 @@ import {
   supprimerDemande,
   type DemandeDetail,
   type FormulaireRisqueApi,
-  type StatutDemande,
 } from "../../api/demandes";
+import type { FiltresListe } from "./helpers/parseFiltresListe";
 
 export const demandesKeys = {
   all: ["demandes"] as const,
   listes: () => [...demandesKeys.all, "liste"] as const,
-  liste: (filtres: { statut: StatutDemande | ""; page: number }) => [...demandesKeys.listes(), filtres] as const,
+  liste: (filtres: FiltresListe) => [...demandesKeys.listes(), filtres] as const,
   details: () => [...demandesKeys.all, "detail"] as const,
   detail: (id: string) => [...demandesKeys.details(), id] as const,
 };
 
-export const useDemandes = (filtres: { statut: StatutDemande | ""; page: number }) => {
+export const useDemandes = (filtres: FiltresListe) => {
   return useQuery({
     queryKey: demandesKeys.liste(filtres),
     queryFn: ({ signal }) => listerDemandes(filtres, signal),
@@ -89,5 +90,11 @@ export const useRelancerDemande = (demandeId: string) => {
 export const useTelechargerFdrPdf = (demandeId: string) => {
   return useMutation({
     mutationFn: () => recupererFdrPdf(demandeId),
+  });
+};
+
+export const useTelechargerAttestationFinale = () => {
+  return useMutation({
+    mutationFn: (demandeId: string) => recupererAttestationFinalePdf(demandeId),
   });
 };

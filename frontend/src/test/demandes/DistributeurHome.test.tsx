@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { HttpResponse, delay, http } from "msw";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Demande, DemandesPaginees } from "../../api/demandes";
 import { AuthProvider } from "../../features/auth/AuthProvider";
@@ -363,5 +363,141 @@ describe("DistributeurHome — suppression d'un brouillon", () => {
     await user.click(screen.getByRole("button", { name: "Supprimer" }));
 
     expect(await screen.findByText("Impossible de supprimer ce brouillon.")).toBeInTheDocument();
+  });
+});
+
+describe("DistributeurHome — décision et suivi", () => {
+  const acceptee = creerDemande({
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    statut: "TRAITE",
+    decision: "ACCEPTEE",
+    attestation_finale: { validated_at: "2026-09-19T10:00:00Z" },
+  });
+  const refusee = creerDemande({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", statut: "TRAITE", decision: "REFUSEE" });
+  const enCours = creerDemande({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", statut: "EN_COURS", decision: null });
+  const brouillon = creerDemande({ decision: null });
+
+  const mockListe = (demandes: Demande[]) =>
+    server.use(http.get("*/demandes/", () => HttpResponse.json(paginer(demandes))));
+
+  it("affiche la colonne Décision, sans Dernière modification", async () => {
+    mockListe([brouillon, enCours, acceptee, refusee]);
+    renderPage();
+    await screen.findByRole("cell", { name: "Acceptée" });
+
+    expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+      "Statut",
+      "Décision",
+      "Date de création",
+      "Actions",
+    ]);
+    expect(screen.getByRole("cell", { name: "Refusée" })).toBeInTheDocument();
+    expect(screen.getAllByRole("cell", { name: "—" })).toHaveLength(2);
+  });
+
+  it("affiche les trois filtres avec leurs options, sans champ obligatoire", async () => {
+    mockListe([brouillon]);
+    renderPage();
+    const options = async (libelle: string) =>
+      Array.from(((await screen.findByLabelText(libelle)) as HTMLSelectElement).options).map((o) => o.textContent);
+
+    expect(await options("Statut")).toEqual(["Tous les statuts", "Brouillon", "En cours", "Traité"]);
+    expect(await options("Décision")).toEqual(["Toutes les décisions", "Acceptée", "Refusée", "En attente"]);
+    expect(await options("Compléments")).toEqual(["Tous", "Compléments demandés", "Aucun complément demandé"]);
+    expect(screen.getByLabelText("Statut")).not.toBeRequired();
+  });
+
+  it("initialise les trois filtres depuis l'URL et les envoie à l'API", async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get("*/demandes/", ({ request }) => {
+        urls.push(request.url);
+        return HttpResponse.json(paginer([enCours]));
+      }),
+    );
+    renderPage("/distributeur?statut=EN_COURS&decision=EN_ATTENTE&complements=DEMANDES");
+    await screen.findByRole("cell", { name: "En cours" });
+
+    expect(screen.getByLabelText("Statut")).toHaveValue("EN_COURS");
+    expect(screen.getByLabelText("Décision")).toHaveValue("EN_ATTENTE");
+    expect(screen.getByLabelText("Compléments")).toHaveValue("DEMANDES");
+    const params = new URL(urls.at(-1) ?? "").searchParams;
+    expect(params.get("statut")).toBe("EN_COURS");
+    expect(params.get("decision")).toBe("EN_ATTENTE");
+    expect(params.get("complements")).toBe("DEMANDES");
+  });
+
+  it("ignore une valeur de filtre inconnue dans l'URL", async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get("*/demandes/", ({ request }) => {
+        urls.push(request.url);
+        return HttpResponse.json(paginer([brouillon]));
+      }),
+    );
+    renderPage("/distributeur?complements=TOUS&decision=X");
+    await screen.findByRole("cell", { name: "Brouillon" });
+
+    expect(urls.at(-1)).not.toContain("complements=");
+    expect(urls.at(-1)).not.toContain("decision=");
+  });
+
+  it("envoie decision seule puis combinée au statut, en revenant à la page 1", async () => {
+    const user = userEvent.setup();
+    const urls: string[] = [];
+    server.use(
+      http.get("*/demandes/", ({ request }) => {
+        urls.push(request.url);
+        return HttpResponse.json(paginer([brouillon]));
+      }),
+    );
+    renderPage("/distributeur?page=2");
+    await screen.findByRole("cell", { name: "Brouillon" });
+
+    await user.selectOptions(screen.getByLabelText("Décision"), "En attente");
+    await waitFor(() => expect(urls.at(-1)).toContain("decision=EN_ATTENTE"));
+    expect(urls.at(-1)).not.toContain("page=2");
+    expect(urls.at(-1)).not.toContain("statut=");
+
+    await user.selectOptions(screen.getByLabelText("Statut"), "Traité");
+    await user.selectOptions(screen.getByLabelText("Compléments"), "Aucun complément demandé");
+    await waitFor(() => {
+      expect(urls.at(-1)).toContain("statut=TRAITE");
+      expect(urls.at(-1)).toContain("decision=EN_ATTENTE");
+      expect(urls.at(-1)).toContain("complements=AUCUN");
+    });
+    await user.selectOptions(screen.getByLabelText("Compléments"), "Tous");
+    await waitFor(() => expect(urls.at(-1)).not.toContain("complements="));
+    expect(urls.at(-1)).toContain("statut=TRAITE");
+  });
+
+  it("propose le téléchargement uniquement pour une demande acceptée avec attestation finale", async () => {
+    mockListe([brouillon, enCours, acceptee, refusee]);
+    renderPage();
+    await screen.findByRole("cell", { name: "Acceptée" });
+
+    expect(screen.getAllByRole("button", { name: /Télécharger l'attestation/ })).toHaveLength(1);
+    expect(screen.getAllByRole("link", { name: /Consulter/ })).toHaveLength(3);
+    expect(screen.getByRole("link", { name: /Modifier/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Supprimer/ })).toBeInTheDocument();
+  });
+
+  it("télécharge le PDF final via le Blob authentifié", async () => {
+    const user = userEvent.setup();
+    const pdf = vi.fn(() => new HttpResponse("%PDF-1.4 final", { headers: { "Content-Type": "application/pdf" } }));
+    mockListe([acceptee]);
+    server.use(http.get("*/demandes/:id/attestation-finale/pdf/", pdf));
+    URL.createObjectURL = vi.fn(() => "blob:final");
+    URL.revokeObjectURL = vi.fn();
+    let fichier: string | undefined;
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      fichier = this.download;
+    });
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /Télécharger l'attestation/ }));
+
+    await waitFor(() => expect(fichier).toBe(`attestation-definitive-${acceptee.id}.pdf`));
+    expect(pdf).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,3 +3,15 @@
   display: flex;
   gap: 0.5rem;
 }
+
+@media (min-width: 768px) {
+  .demandes-table__actions,
+  .demandes-table__actions .af-btn {
+    white-space: nowrap;
+  }
+}
+
+.demandes-table__col-actions {
+  white-space: nowrap;
+  width: 1%;
+}

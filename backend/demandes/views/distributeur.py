@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -20,6 +21,7 @@ from ..html_sanitization import nettoyer_html
 from ..models import (
     DecisionDemande,
     Demande,
+    DemandeComplement,
     FormulaireRisque,
     Notification,
     PieceJustificative,
@@ -50,6 +52,12 @@ TITRE_RELANCE = "Demande relancée"
 MESSAGE_RELANCE = "Le distributeur a relancé une demande en cours de traitement."
 
 DELAI_RELANCE = timedelta(hours=24)
+
+DECISION_EN_ATTENTE = "EN_ATTENTE"
+
+COMPLEMENTS_DEMANDES = "DEMANDES"
+COMPLEMENTS_AUCUN = "AUCUN"
+FILTRES_COMPLEMENTS = (COMPLEMENTS_DEMANDES, COMPLEMENTS_AUCUN)
 
 
 class DemandePagination(PageNumberPagination):
@@ -84,6 +92,37 @@ class DemandeViewSet(
                         }
                     )
                 queryset = queryset.filter(statut=statut)
+            decision = self.request.query_params.get("decision")
+            if decision:
+                if decision == DECISION_EN_ATTENTE:
+                    queryset = queryset.filter(statut=StatutDemande.EN_COURS, decision__isnull=True)
+                elif decision in DecisionDemande.values:
+                    queryset = queryset.filter(decision=decision)
+                else:
+                    raise ValidationError(
+                        {
+                            "decision": (
+                                "Valeur invalide. Valeurs autorisées : "
+                                f"{', '.join([*DecisionDemande.values, DECISION_EN_ATTENTE])}."
+                            )
+                        }
+                    )
+            complements = self.request.query_params.get("complements")
+            if complements:
+                if complements not in FILTRES_COMPLEMENTS:
+                    raise ValidationError(
+                        {
+                            "complements": (
+                                "Valeur invalide. Valeurs autorisées : "
+                                f"{', '.join(FILTRES_COMPLEMENTS)}."
+                            )
+                        }
+                    )
+                a_des_complements = Exists(DemandeComplement.objects.filter(demande=OuterRef("pk")))
+                queryset = queryset.filter(
+                    a_des_complements if complements == COMPLEMENTS_DEMANDES else ~a_des_complements
+                )
+            queryset = queryset.select_related("attestation")
 
         return queryset
 

@@ -1,7 +1,7 @@
 import { Button, EditorialMessage, Loader, MainContainer, Message } from "@axa-fr/canopee-react/distributeur";
 import assignmentIcon from "@material-symbols/svg-400/outlined/assignment.svg";
 
-import { DemandesFilter } from "../../features/demandes/components/DemandesFilter/DemandesFilter";
+import { DemandesFiltres } from "../../features/demandes/components/DemandesFilter/DemandesFiltres";
 import { DemandesTable } from "../../features/demandes/components/DemandesTable/DemandesTable";
 import { SupprimerBrouillonModal } from "../../features/demandes/components/SupprimerBrouillonModal/SupprimerBrouillonModal";
 import { PageHeader } from "../../layout/PageHeader";
@@ -10,7 +10,8 @@ import { useDistributeurHome } from "./useDistributeurHome";
 
 export const DistributeurHome = () => {
   const {
-    statutSelectionne,
+    filtres,
+    aucunFiltre,
     page,
     nombreDePages,
     demandes,
@@ -20,7 +21,13 @@ export const DistributeurHome = () => {
     erreurChargement,
     reessayerChargement,
     changerStatut,
+    changerDecision,
+    changerComplements,
     changerPage,
+    telechargerAttestation,
+    attestationEnCours,
+    erreurAttestation,
+    fermerErreurAttestation,
     creerDemande,
     demandeASupprimer,
     ouvrirSuppression,
@@ -61,9 +68,21 @@ export const DistributeurHome = () => {
             />
           )}
 
-          <Surface>
-            <DemandesFilter statut={statutSelectionne} onChange={changerStatut} />
-          </Surface>
+          {erreurAttestation && (
+            <Message
+              title={erreurAttestation}
+              variant="error"
+              onClose={fermerErreurAttestation}
+              closeButtonAriaLabel="Fermer"
+            />
+          )}
+
+          <DemandesFiltres
+            filtres={filtres}
+            onStatutChange={changerStatut}
+            onDecisionChange={changerDecision}
+            onComplementsChange={changerComplements}
+          />
 
           {isLoading && <Loader mode="get">{null}</Loader>}
 
@@ -78,7 +97,7 @@ export const DistributeurHome = () => {
             </Surface>
           )}
 
-          {!isLoading && !erreurChargement && demandes.length === 0 && statutSelectionne === "" && (
+          {!isLoading && !erreurChargement && demandes.length === 0 && aucunFiltre && (
             <Surface>
               <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande pour le moment.">
                 Les demandes que vous créez apparaîtront ici.
@@ -86,10 +105,10 @@ export const DistributeurHome = () => {
             </Surface>
           )}
 
-          {!isLoading && !erreurChargement && demandes.length === 0 && statutSelectionne !== "" && (
+          {!isLoading && !erreurChargement && demandes.length === 0 && !aucunFiltre && (
             <Surface>
               <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande ne correspond à ce filtre.">
-                Essayez un autre statut.
+                Essayez d'autres filtres.
               </EditorialMessage>
             </Surface>
           )}
@@ -101,6 +120,8 @@ export const DistributeurHome = () => {
               nombreDePages={nombreDePages}
               onPageChange={changerPage}
               onSupprimer={ouvrirSuppression}
+              onTelechargerAttestation={telechargerAttestation}
+              attestationEnCours={attestationEnCours}
             />
           )}
         </div>

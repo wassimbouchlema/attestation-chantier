@@ -9,12 +9,24 @@ from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
 
-from ..models import Demande, FormulaireRisque, PieceJustificative, StatutDemande, TypeChantier, TypeIntervention, Usage
+from ..models import (
+    Attestation,
+    DecisionDemande,
+    Demande,
+    DemandeComplement,
+    FormulaireRisque,
+    PieceJustificative,
+    StatutDemande,
+    TypeChantier,
+    TypeIntervention,
+    Usage,
+)
 from ..rules import PIECE_COMPLEXITE
 
 
@@ -284,6 +296,91 @@ class DemandeEndpointTests(APITestCase):
         response = self.client.get(reverse("demande-list"), {"statut": "INCONNU"})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filtre_decision_et_combinaison_avec_statut(self):
+        acceptee = Demande.objects.create(
+            distributeur=self.distributeur_a, statut=StatutDemande.TRAITE, decision=DecisionDemande.ACCEPTEE
+        )
+        refusee = Demande.objects.create(
+            distributeur=self.distributeur_a, statut=StatutDemande.TRAITE, decision=DecisionDemande.REFUSEE
+        )
+        en_cours = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        Demande.objects.create(
+            distributeur=self.distributeur_b, statut=StatutDemande.TRAITE, decision=DecisionDemande.ACCEPTEE
+        )
+        self._authentifier(self.distributeur_a)
+
+        def ids(**filtres):
+            response = self.client.get(reverse("demande-list"), filtres)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            return {demande["id"] for demande in response.data["results"]}
+
+        self.assertEqual(ids(decision="ACCEPTEE"), {str(acceptee.id)})
+        self.assertEqual(ids(decision="REFUSEE"), {str(refusee.id)})
+        brouillon = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.BROUILLON)
+        self.assertEqual(ids(decision="EN_ATTENTE"), {str(en_cours.id)})
+        self.assertNotIn(str(brouillon.id), ids(decision="EN_ATTENTE"))
+        self.assertEqual(ids(statut="BROUILLON", decision="EN_ATTENTE"), set())
+        self.assertEqual(ids(statut="TRAITE", decision="ACCEPTEE"), {str(acceptee.id)})
+        self.assertEqual(ids(statut="EN_COURS", decision="ACCEPTEE"), set())
+        self.assertEqual(ids(statut="EN_COURS", decision="EN_ATTENTE"), {str(en_cours.id)})
+
+    def test_filtre_complements_et_combinaison(self):
+        avec = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        DemandeComplement.objects.create(demande=avec, message="Premier")
+        DemandeComplement.objects.create(demande=avec, message="Second", received_at=timezone.now())
+        sans = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.EN_COURS)
+        traitee = Demande.objects.create(
+            distributeur=self.distributeur_a, statut=StatutDemande.TRAITE, decision=DecisionDemande.ACCEPTEE
+        )
+        DemandeComplement.objects.create(demande=traitee, message="Ancien", received_at=timezone.now())
+        autre = Demande.objects.create(distributeur=self.distributeur_b, statut=StatutDemande.EN_COURS)
+        DemandeComplement.objects.create(demande=autre, message="Autre distributeur")
+        self._authentifier(self.distributeur_a)
+
+        def liste(**filtres):
+            response = self.client.get(reverse("demande-list"), filtres)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            return [demande["id"] for demande in response.data["results"]]
+
+        self.assertCountEqual(liste(complements="DEMANDES"), [str(avec.id), str(traitee.id)])
+        aucun = liste(complements="AUCUN")
+        self.assertIn(str(sans.id), aucun)
+        self.assertNotIn(str(avec.id), aucun)
+        self.assertNotIn(str(traitee.id), aucun)
+        self.assertNotIn(str(autre.id), aucun)
+        self.assertEqual(liste(statut="EN_COURS", decision="EN_ATTENTE", complements="DEMANDES"), [str(avec.id)])
+        self.assertEqual(liste(statut="TRAITE", decision="ACCEPTEE", complements="DEMANDES"), [str(traitee.id)])
+        self.assertEqual(liste(statut="TRAITE", complements="AUCUN"), [])
+
+    def test_filtre_complements_invalide_retourne_400(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.get(reverse("demande-list"), {"complements": "TOUS"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filtre_decision_invalide_retourne_400(self):
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.get(reverse("demande-list"), {"decision": "INCONNUE"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_liste_expose_decision_et_attestation_finale(self):
+        demande = Demande.objects.create(
+            distributeur=self.distributeur_a, statut=StatutDemande.TRAITE, decision=DecisionDemande.ACCEPTEE
+        )
+        Attestation.objects.create(demande=demande, pdf_final="attestations/x.pdf", validated_at=timezone.now())
+        Demande.objects.create(
+            distributeur=self.distributeur_a, statut=StatutDemande.TRAITE, decision=DecisionDemande.REFUSEE
+        )
+        self._authentifier(self.distributeur_a)
+
+        resultats = {d["decision"]: d for d in self.client.get(reverse("demande-list")).data["results"]}
+
+        self.assertIsNotNone(resultats["ACCEPTEE"]["attestation_finale"]["validated_at"])
+        self.assertIsNone(resultats["REFUSEE"]["attestation_finale"])
 
     def test_filtre_statut_vide_equivaut_a_aucun_filtre(self):
         self._authentifier(self.distributeur_a)
