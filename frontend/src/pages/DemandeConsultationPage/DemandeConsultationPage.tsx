@@ -23,6 +23,11 @@ export const DemandeConsultationPage = () => {
     pdfEnCours,
     erreurPdf,
     fermerErreurPdf,
+    previsualiserAttestationFinale,
+    telechargerAttestationFinale,
+    attestationFinaleEnCours,
+    erreurAttestationFinale,
+    fermerErreurAttestationFinale,
     relancer,
     prochaineRelance,
     relanceEnCours,
@@ -87,7 +92,7 @@ export const DemandeConsultationPage = () => {
                     <Restitution label="Dernière relance">
                       {demande.last_relance_at ? formatDateHeure(demande.last_relance_at) : "Aucune"}
                     </Restitution>
-                    {prochaineRelance && (
+                    {prochaineRelance && demande.statut === "EN_COURS" && (
                       <Restitution label="Nouvelle relance possible le">
                         {formatDateHeure(prochaineRelance.toISOString())}
                       </Restitution>
@@ -148,7 +153,35 @@ export const DemandeConsultationPage = () => {
                 </Button>
               </Surface>
 
-              {demande.statut !== "BROUILLON" && (
+              {demande.decision === "ACCEPTEE" && demande.attestation_finale && (
+                <Surface>
+                  <Title heading="h2">Attestation définitive</Title>
+                  <p>Demande acceptée.</p>
+                  {demande.attestation_finale.validated_at && (
+                    <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                      <Restitution label="Attestation validée le">
+                        {formatDateHeure(demande.attestation_finale.validated_at)}
+                      </Restitution>
+                    </div>
+                  )}
+                  {erreurAttestationFinale && (
+                    <Message
+                      variant="error"
+                      title={erreurAttestationFinale}
+                      onClose={fermerErreurAttestationFinale}
+                      closeButtonAriaLabel="Fermer"
+                    />
+                  )}
+                  <Button variant="secondary" onClick={previsualiserAttestationFinale} disabled={attestationFinaleEnCours}>
+                    Prévisualiser
+                  </Button>
+                  <Button variant="primary" onClick={telechargerAttestationFinale} disabled={attestationFinaleEnCours}>
+                    Télécharger
+                  </Button>
+                </Surface>
+              )}
+
+              {demande.statut !== "BROUILLON" && !demande.attestation_finale && (
                 <Surface>
                   <Title heading="h2">Projet d'attestation</Title>
 

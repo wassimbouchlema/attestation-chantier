@@ -200,6 +200,7 @@ class TypeNotification(models.TextChoices):
     RELANCE = "RELANCE", "Relance"
     COMPLEMENTS_DEMANDES = "COMPLEMENTS_DEMANDES", "Compléments demandés"
     DEMANDE_REFUSEE = "DEMANDE_REFUSEE", "Demande refusée"
+    DEMANDE_ACCEPTEE = "DEMANDE_ACCEPTEE", "Demande acceptée"
 
 
 class Notification(models.Model):

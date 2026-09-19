@@ -1,9 +1,11 @@
 import mimetypes
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -106,6 +108,51 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         )
         response["Content-Disposition"] = f'inline; filename="preparation-attestation-{demande.id}.pdf"'
         return response
+
+    @action(detail=True, methods=["post"], url_path="attestation/valider")
+    def valider_attestation(self, request, pk=None):
+        nom_pdf = None
+        stockage = Attestation._meta.get_field("pdf_final").storage
+        try:
+            with transaction.atomic():
+                demande = get_object_or_404(
+                    Demande.objects.select_for_update(of=("self",)).select_related("fdr", "distributeur"), pk=pk
+                )
+                attestation = get_object_or_404(Attestation.objects.select_for_update(), demande=demande)
+                if attestation.validated_at is not None:
+                    return Response(
+                        {"code": "ATTESTATION_DEJA_VALIDEE", "detail": "Cette attestation est déjà validée."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                conflit = self._conflit_traitement(demande)
+                if conflit is not None:
+                    return conflit
+                contenu = nettoyer_html(attestation.contenu_html)
+                if not contenu.strip():
+                    return Response(
+                        {"code": "ATTESTATION_VIDE", "detail": "L'attestation est vide et ne peut pas être validée."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                pdf = generer_pdf(demande, contenu, definitif=True)
+                attestation.pdf_final.save(f"attestation-definitive-{demande.id}.pdf", ContentFile(pdf), save=False)
+                nom_pdf = attestation.pdf_final.name
+                attestation.validated_at = timezone.now()
+                attestation.save(update_fields=["pdf_final", "validated_at", "updated_at"])
+                demande.decision = DecisionDemande.ACCEPTEE
+                demande.statut = StatutDemande.TRAITE
+                demande.save(update_fields=["decision", "statut", "updated_at"])
+                Notification.objects.create(
+                    destinataire=demande.distributeur,
+                    demande=demande,
+                    type_notification=TypeNotification.DEMANDE_ACCEPTEE,
+                    titre="Demande acceptée",
+                    message="Votre demande a été acceptée. L'attestation définitive est disponible.",
+                )
+                return Response(self.get_serializer(demande).data)
+        except Exception:
+            if nom_pdf:
+                stockage.delete(nom_pdf)
+            raise
 
     @action(detail=True, methods=["post"], url_path="attestation/analyser-coherence")
     def analyser_coherence_attestation(self, request, pk=None):

@@ -1,4 +1,4 @@
-import { Button, Loader, MainContainer, Message, Tag } from "@axa-fr/canopee-react/distributeur";
+import { Button, Loader, MainContainer, Message, Modal, ModalBody, ModalFooter, ModalHeader, Tag } from "@axa-fr/canopee-react/distributeur";
 
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
 import { ResultatCoherence } from "../../features/attestation/components/ResultatCoherence";
@@ -6,7 +6,7 @@ import { PageHeader } from "../../layout/PageHeader";
 import { useAttestationPage } from "./useAttestationPage";
 
 export const AttestationPage = () => {
-  const page = useAttestationPage();
+  const { dialogRef, ...page } = useAttestationPage();
   return (
     <>
       <PageHeader title="Préparation d'attestation" actions={<Tag variant="warning">Non validée</Tag>} />
@@ -29,14 +29,16 @@ export const AttestationPage = () => {
                 demande={page.demande}
                 valeurInitiale={page.attestation.contenu_html}
                 onChange={page.modifierContenu}
-                disabled={page.enregistrementEnCours}
+                disabled={page.enregistrementEnCours || page.validationEnCours}
               />
               {page.succes && <Message variant="success" title="Attestation enregistrée." />}
               {page.erreurEnregistrement && <Message variant="error" title={page.erreurEnregistrement} />}
               {page.erreurPdf && <Message variant="error" title={page.erreurPdf} />}
+              {page.erreurValidation && <Message variant="error" title={page.erreurValidation} />}
               {page.dirty && <p>Enregistrez vos modifications avant de générer la prévisualisation.</p>}
+              {page.dirty && <p>Enregistrez vos modifications avant de valider l'attestation.</p>}
               <div className="fdr-actions-globales">
-                <Button variant="primary" onClick={page.enregistrer} disabled={page.enregistrementEnCours}>
+                <Button variant="primary" onClick={page.enregistrer} disabled={page.enregistrementEnCours || page.validationEnCours}>
                   {page.enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
                 </Button>
                 <Button variant="secondary" onClick={page.previsualiser} disabled={page.pdfDisabled}>
@@ -44,6 +46,9 @@ export const AttestationPage = () => {
                 </Button>
                 <Button variant="secondary" onClick={page.telecharger} disabled={page.pdfDisabled}>
                   Télécharger la prévisualisation
+                </Button>
+                <Button variant="primary" onClick={page.ouvrirConfirmation} disabled={page.validationDisabled}>
+                  Valider et accepter
                 </Button>
               </div>
               <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
@@ -62,6 +67,35 @@ export const AttestationPage = () => {
           <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
         </div>
       </MainContainer>
+      {page.confirmationOuverte && (
+        <Modal
+          ref={dialogRef}
+          title="Valider et accepter cette demande ?"
+          onOutsideTap={page.fermerConfirmation}
+          onCancel={(event) => {
+            event.preventDefault();
+            page.fermerConfirmation();
+          }}
+        >
+          <ModalHeader onCancel={page.fermerConfirmation} closeButtonAriaLabel="Fermer">
+            Valider et accepter cette demande ?
+          </ModalHeader>
+          <ModalBody>
+            <p>
+              Cette action générera l'attestation définitive et marquera la demande comme traitée et acceptée.
+            </p>
+            <p>L'attestation ne pourra plus être modifiée après validation.</p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" onClick={page.fermerConfirmation} disabled={page.validationEnCours}>
+              Annuler
+            </Button>
+            <Button variant="primary" onClick={page.confirmerValidation} disabled={page.validationEnCours}>
+              {page.validationEnCours ? "Validation…" : "Valider et accepter"}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
     </>
   );
 };

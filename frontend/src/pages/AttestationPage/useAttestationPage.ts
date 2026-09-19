@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { ResultatCoherenceApi } from "../../api/attestation";
-import { useAnalyserCoherence, useAttestation, useAttestationPdf, useSauvegarderAttestation } from "../../features/attestation/queries";
+import { useAnalyserCoherence, useAttestation, useAttestationPdf, useSauvegarderAttestation, useValiderAttestation } from "../../features/attestation/queries";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { useDemandeSiege } from "../../features/siege/queries";
@@ -21,6 +21,12 @@ export const useAttestationPage = () => {
   const [dirty, setDirty] = useState(false);
   const [succes, setSucces] = useState(false);
   const analyse = useAnalyserCoherence(demandeId);
+  const validation = useValiderAttestation(demandeId);
+  const [confirmationOuverte, setConfirmationOuverte] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (confirmationOuverte) dialogRef.current?.showModal();
+  }, [confirmationOuverte]);
   const revision = useRef(0);
   const [controle, setControle] = useState<{
     resultat: ResultatCoherenceApi;
@@ -48,6 +54,25 @@ export const useAttestationPage = () => {
       onError: (error) => {
         if (revision.current === revisionAnalysee) setErreurAnalyse(messageErreurAffichable(error));
       },
+    });
+  };
+
+  const validationDisabled = dirty || sauvegarde.isPending || validation.isPending
+    || !attestationQuery.data || attestationQuery.data.validated_at !== null
+    || demandeQuery.data?.statut !== "EN_COURS" || demandeQuery.data?.decision !== null;
+
+  const fermerConfirmation = () => {
+    if (!validation.isPending) setConfirmationOuverte(false);
+  };
+
+  const confirmerValidation = () => {
+    if (validationDisabled) return;
+    validation.mutate(undefined, {
+      onSuccess: () => {
+        setConfirmationOuverte(false);
+        navigate("/siege", { state: { successMessage: "Demande acceptée et attestation définitive générée." } });
+      },
+      onError: () => setConfirmationOuverte(false),
     });
   };
 
@@ -89,11 +114,23 @@ export const useAttestationPage = () => {
     resultatAnalyse: !dirty && controle?.demandeId === demandeId
       && controle.contenu === attestationQuery.data?.contenu_html
       && controle.updatedAt === attestationQuery.data?.updated_at ? controle.resultat : null,
+    validationDisabled,
+    validationEnCours: validation.isPending,
+    erreurValidation: validation.isError ? messageErreurAffichable(validation.error) : null,
+    confirmationOuverte,
+    dialogRef,
+    ouvrirConfirmation: () => {
+      if (validationDisabled) return;
+      validation.reset();
+      setConfirmationOuverte(true);
+    },
+    fermerConfirmation,
+    confirmerValidation,
     enregistrer,
     enregistrementEnCours: sauvegarde.isPending,
     erreurEnregistrement: sauvegarde.isError ? messageErreurAffichable(sauvegarde.error) : null,
     succes,
-    pdfDisabled: dirty || sauvegarde.isPending || pdf.isPending,
+    pdfDisabled: dirty || sauvegarde.isPending || pdf.isPending || validation.isPending,
     erreurPdf: pdf.isError ? messageErreurAffichable(pdf.error) : null,
     previsualiser: () => {
       if (!dirty && !sauvegarde.isPending && !pdf.isPending) {

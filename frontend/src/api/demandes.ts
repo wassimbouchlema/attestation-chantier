@@ -72,6 +72,7 @@ export interface DemandeDetail extends Demande {
   distributeur_nom?: string;
   decision?: "ACCEPTEE" | "REFUSEE" | null;
   motif_refus?: string;
+  attestation_finale?: { validated_at: string | null } | null;
   complement_actif?: {
     id: string;
     message: string;

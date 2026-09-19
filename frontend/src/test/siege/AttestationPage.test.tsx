@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 import type { AttestationApi, ResultatCoherenceApi } from "../../api/attestation";
@@ -34,12 +34,18 @@ const documentInitial: AttestationApi = {
   created_at: "2026-09-19T09:00:00Z", updated_at: "2026-09-19T09:00:00Z", pdf_final: null, validated_at: null,
 };
 
+const AccueilSiegeStub = () => {
+  const etat = useLocation().state as { successMessage?: string } | null;
+  return <p>Accueil SIÈGE (page) {etat?.successMessage}</p>;
+};
+
 const renderPage = (detail = false) => render(
   <AuthProvider>
     <QueryClientProvider client={createQueryClient()}>
       <MemoryRouter initialEntries={[`/siege/demandes/${ID}${detail ? "" : "/attestation"}`]}>
         <Routes>
           <Route path="/siege/demandes/:id/attestation" element={<AttestationPage />} />
+          <Route path="/siege" element={<AccueilSiegeStub />} />
           <Route path="/siege/demandes/:id" element={<SiegeDemandeConsultationPage />} />
         </Routes>
       </MemoryRouter>
@@ -112,7 +118,7 @@ describe("Éditeur SIÈGE", () => {
     expect(within(feuille).queryByText("Non validée")).not.toBeInTheDocument();
     expect(within(feuille).queryByText("Validation définitive : réservée au siège.")).not.toBeInTheDocument();
     expect(within(feuille).queryByText("Alice Martin")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Valider|Accepter|Refuser/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Accepter|Refuser/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled();
     expect(screen.queryByText(/Enregistrez vos modifications/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeEnabled();
@@ -194,7 +200,7 @@ describe("Contrôle de cohérence SIÈGE", () => {
     expect(await screen.findByText("Cohérent")).toBeInTheDocument();
     expect(screen.getByText("Aucune incohérence détectée entre le FDR et l'attestation enregistrée.")).toBeInTheDocument();
     expect(screen.getByText("Analyse simulée")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Valider|Accepter|Refuser/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Accepter|Refuser/ })).not.toBeInTheDocument();
     expect(sauvegarder).not.toHaveBeenCalled();
     expect(analyser).toHaveBeenCalledTimes(1);
   });
@@ -315,5 +321,60 @@ describe("Préparation depuis le détail SIÈGE", () => {
     renderPage(true);
     await screen.findByRole("heading", { name: "Traitement de la demande" });
     expect(screen.queryByRole("button", { name: /Préparer|Reprendre/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Validation et acceptation SIÈGE", () => {
+  const demandeTraitee: DemandeDetail = { ...demande, statut: "TRAITE", decision: "ACCEPTEE" };
+
+  it("désactive la validation tant que le contenu n'est pas enregistré, sans exiger l'analyse IA", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const editeur = await attendreEditeur();
+    expect(screen.getByRole("button", { name: "Valider et accepter" })).toBeEnabled();
+    await user.type(editeur, "Ajout siège.");
+    expect(screen.getByRole("button", { name: "Valider et accepter" })).toBeDisabled();
+    expect(screen.getByText("Enregistrez vos modifications avant de valider l'attestation.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await screen.findByText("Attestation enregistrée.");
+    expect(screen.getByRole("button", { name: "Valider et accepter" })).toBeEnabled();
+    expect(analyser).not.toHaveBeenCalled();
+  });
+
+  it("demande confirmation, valide une seule fois et retourne à l'accueil SIÈGE", async () => {
+    const valider = vi.fn(async () => {
+      await delay(50);
+      return HttpResponse.json(demandeTraitee);
+    });
+    server.use(http.post("*/siege/demandes/:id/attestation/valider/", valider));
+    const user = userEvent.setup();
+    renderPage();
+    await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Valider et accepter" }));
+    const dialogue = await screen.findByRole("dialog", { name: /Valider et accepter cette demande/ });
+    expect(within(dialogue).getByText(/L'attestation ne pourra plus être modifiée après validation./)).toBeInTheDocument();
+    await user.click(within(dialogue).getByRole("button", { name: "Annuler" }));
+    expect(valider).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Valider et accepter" }));
+    const confirmer = within(await screen.findByRole("dialog")).getByRole("button", { name: "Valider et accepter" });
+    await user.dblClick(confirmer);
+    expect(await screen.findByText(/Accueil SIÈGE \(page\)/)).toHaveTextContent(
+      "Demande acceptée et attestation définitive générée.",
+    );
+    expect(valider).toHaveBeenCalledTimes(1);
+  });
+
+  it("affiche l'erreur backend et reste sur la page", async () => {
+    server.use(http.post("*/siege/demandes/:id/attestation/valider/", () => HttpResponse.json(
+      { code: "ATTESTATION_DEJA_VALIDEE", detail: "Cette attestation est déjà validée." }, { status: 409 },
+    )));
+    const user = userEvent.setup();
+    renderPage();
+    await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Valider et accepter" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Valider et accepter" }));
+    expect(await screen.findByText("Cette attestation est déjà validée.")).toBeInTheDocument();
+    expect(screen.queryByText(/Accueil SIÈGE/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Contrôle de cohérence" })).toBeInTheDocument();
   });
 });

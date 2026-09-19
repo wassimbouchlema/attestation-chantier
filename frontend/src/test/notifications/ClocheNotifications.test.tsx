@@ -355,6 +355,7 @@ describe("ClocheNotifications — navigation", () => {
   it.each([
     ["COMPLEMENTS_DEMANDES", "Compléments demandés"],
     ["DEMANDE_REFUSEE", "Demande refusée"],
+    ["DEMANDE_ACCEPTEE", "Demande acceptée"],
   ] as const)("%s côté distributeur : affiche le badge et navigue vers sa demande", async (typeNotification, titre) => {
     seedSession("DISTRIBUTEUR");
     const user = userEvent.setup();

@@ -1,3 +1,4 @@
+import type { DemandeDetail } from "./demandes";
 import { ErreurReseauOuServeur, lireJson } from "./http";
 import { requeteAuthentifiee } from "./httpAuthentifie";
 
@@ -64,6 +65,19 @@ export const sauvegarderAttestation = async (id: string, contenuHtml: string): P
   const message = "Impossible d'enregistrer l'attestation.";
   await verifierReponse(response, message);
   return lireJson<AttestationApi>(response, message);
+};
+
+export const validerAttestation = async (id: string): Promise<DemandeDetail> => {
+  const response = await requeteAuthentifiee(`${urlAttestation(id)}valider/`, { method: "POST" });
+  const message = "Impossible de valider l'attestation.";
+  await verifierReponse(response, message);
+  return lireJson<DemandeDetail>(response, message);
+};
+
+export const recupererAttestationFinalePdf = async (id: string): Promise<Blob> => {
+  const response = await requeteAuthentifiee(`/demandes/${id}/attestation-finale/pdf/`);
+  await verifierReponse(response, "Impossible de récupérer l'attestation définitive.");
+  return response.blob();
 };
 
 export const recupererAttestationPdf = async (id: string): Promise<Blob> => {

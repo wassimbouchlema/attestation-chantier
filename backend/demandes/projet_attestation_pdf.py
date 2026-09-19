@@ -40,14 +40,18 @@ def _nom_agent(demande: Demande) -> str:
     return nom_complet or agent.username
 
 
-def construire_html(demande: Demande, contenu_html: str, *, preparation: bool = False) -> str:
+def construire_html(
+    demande: Demande, contenu_html: str, *, preparation: bool = False, definitif: bool = False
+) -> str:
     fdr = demande.fdr
-    marquage = (
-        '<p class="previsualisation">DOCUMENT DE PRÉVISUALISATION — NON VALIDÉ</p>'
-        if preparation
-        else '<p class="titre-projet">PROJET D\'ATTESTATION</p><p class="mention">NON DÉFINITIF</p>'
-    )
-    pied = "" if preparation else '<p class="pied">Validation définitive : réservée au siège.</p>'
+    if definitif:
+        marquage, pied = "", ""
+    elif preparation:
+        marquage = '<p class="previsualisation">DOCUMENT DE PRÉVISUALISATION — NON VALIDÉ</p>'
+        pied = ""
+    else:
+        marquage = '<p class="titre-projet">PROJET D\'ATTESTATION</p><p class="mention">NON DÉFINITIF</p>'
+        pied = '<p class="pied">Validation définitive : réservée au siège.</p>'
     return f"""<html>
 <head><meta charset="utf-8" /><style>{FEUILLE_STYLE}</style></head>
 <body>
@@ -91,12 +95,16 @@ def construire_html(demande: Demande, contenu_html: str, *, preparation: bool = 
 </body></html>"""
 
 
-def generer_pdf(demande: Demande, contenu_html: str, *, preparation: bool = False) -> bytes:
+def generer_pdf(
+    demande: Demande, contenu_html: str, *, preparation: bool = False, definitif: bool = False
+) -> bytes:
     from xhtml2pdf import pisa
 
     sortie = io.BytesIO()
     resultat = pisa.CreatePDF(
-        src=construire_html(demande, contenu_html, preparation=preparation), dest=sortie, encoding="utf-8"
+        src=construire_html(demande, contenu_html, preparation=preparation, definitif=definitif),
+        dest=sortie,
+        encoding="utf-8",
     )
     if resultat.err:
         raise RuntimeError("Échec de la génération du PDF du projet d'attestation.")

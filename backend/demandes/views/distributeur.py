@@ -18,6 +18,7 @@ from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_uniq
 from ..evaluation_risque import calculer_evaluation_risque
 from ..html_sanitization import nettoyer_html
 from ..models import (
+    DecisionDemande,
     Demande,
     FormulaireRisque,
     Notification,
@@ -188,6 +189,20 @@ class DemandeViewSet(
             content_type="application/pdf",
             as_attachment=False,
             filename=f"FDR-{demande.id}.pdf",
+        )
+
+    @action(detail=True, methods=["get"], url_path="attestation-finale/pdf")
+    def attestation_finale_pdf(self, request, pk=None):
+        demande = self.get_object()
+        attestation = getattr(demande, "attestation", None)
+        if demande.decision != DecisionDemande.ACCEPTEE or attestation is None or not attestation.pdf_final:
+            return Response({"detail": "Aucune attestation définitive pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
+
+        return FileResponse(
+            attestation.pdf_final.open("rb"),
+            content_type="application/pdf",
+            as_attachment=False,
+            filename=f"attestation-definitive-{demande.id}.pdf",
         )
 
     @action(detail=True, methods=["post"], url_path="envoyer")

@@ -1,7 +1,7 @@
 import { ErreurReseauOuServeur, lireJson } from "./http";
 import { requeteAuthentifiee } from "./httpAuthentifie";
 
-export type TypeNotification = "DEMANDE_ENVOYEE" | "RELANCE" | "COMPLEMENTS_DEMANDES" | "DEMANDE_REFUSEE";
+export type TypeNotification = "DEMANDE_ENVOYEE" | "RELANCE" | "COMPLEMENTS_DEMANDES" | "DEMANDE_REFUSEE" | "DEMANDE_ACCEPTEE";
 
 /** Reflète `NotificationSerializer` (backend/demandes/serializers.py). */
 export interface NotificationApi {

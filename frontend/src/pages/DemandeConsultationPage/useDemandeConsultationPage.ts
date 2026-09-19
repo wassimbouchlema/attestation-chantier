@@ -7,6 +7,7 @@ import { messageErreurAffichable } from "../../features/demandes/helpers/message
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { calculerProchaineRelance } from "../../features/demandes/helpers/prochaineRelance";
 import { useDemande, useRelancerDemande, useTelechargerFdrPdf } from "../../features/demandes/queries";
+import { useAttestationFinalePdf } from "../../features/attestation/queries";
 import { useCreerProjetAttestation, useProjetAttestation } from "../../features/projetAttestation/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
@@ -55,6 +56,16 @@ export const useDemandeConsultationPage = () => {
     });
   };
 
+  const attestationFinalePdf = useAttestationFinalePdf(demandeId);
+  const previsualiserAttestationFinale = () => {
+    attestationFinalePdf.mutate(undefined, { onSuccess: ouvrirPdfDansUnNouvelOnglet });
+  };
+  const telechargerAttestationFinale = () => {
+    attestationFinalePdf.mutate(undefined, {
+      onSuccess: (blob) => telechargerPdf(blob, `attestation-definitive-${demandeId}.pdf`),
+    });
+  };
+
   const projetQuery = useProjetAttestation(demandeId);
   const creerProjetMutation = useCreerProjetAttestation(demandeId);
   const creerProjet = () => {
@@ -86,6 +97,12 @@ export const useDemandeConsultationPage = () => {
     pdfEnCours: telechargerPdfMutation.isPending,
     erreurPdf: telechargerPdfMutation.isError ? messageErreurAffichable(telechargerPdfMutation.error) : null,
     fermerErreurPdf: () => telechargerPdfMutation.reset(),
+
+    previsualiserAttestationFinale,
+    telechargerAttestationFinale,
+    attestationFinaleEnCours: attestationFinalePdf.isPending,
+    erreurAttestationFinale: attestationFinalePdf.isError ? messageErreurAffichable(attestationFinalePdf.error) : null,
+    fermerErreurAttestationFinale: () => attestationFinalePdf.reset(),
 
     relancer,
     prochaineRelance,

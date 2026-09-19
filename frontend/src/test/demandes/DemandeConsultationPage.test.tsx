@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, delay, http } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -341,6 +341,19 @@ describe("DemandeConsultationPage — relance", () => {
     expect(screen.getByText("Nouvelle relance possible le")).toBeInTheDocument();
   });
 
+  it("TRAITE : masque la prochaine relance et le bouton, conserve la dernière relance", async () => {
+    const ilYA1Heure = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", last_relance_at: ilYA1Heure }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Suivi de la demande" });
+    expect(screen.getByText("Dernière relance")).toBeInTheDocument();
+    expect(screen.queryByText("Nouvelle relance possible le")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Relancer le siège" })).not.toBeInTheDocument();
+  });
+
   it("cooldown refusé par le backend (409 DELAI_RELANCE_NON_ECOULE) : message avec la date reçue du serveur", async () => {
     const user = userEvent.setup();
     mockDemande(demandeApi());
@@ -460,5 +473,44 @@ describe("DemandeConsultationPage — retour", () => {
     await user.click(screen.getByRole("button", { name: "Retour à mes demandes" }));
 
     expect(await screen.findByText("Mes demandes (page)")).toBeInTheDocument();
+  });
+});
+
+describe("DemandeConsultationPage — attestation définitive", () => {
+  const acceptee = () => demandeApi({
+    statut: "TRAITE",
+    decision: "ACCEPTEE",
+    attestation_finale: { validated_at: "2026-09-19T10:00:00Z" },
+  });
+
+  it("affiche l'attestation définitive puis la prévisualise et la télécharge via le Blob authentifié", async () => {
+    mockDemande(acceptee());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    const pdf = vi.fn(() => new HttpResponse("%PDF-1.4 final", { headers: { "Content-Type": "application/pdf" } }));
+    server.use(http.get("*/demandes/:id/attestation-finale/pdf/", pdf));
+    const user = userEvent.setup();
+    renderPage();
+
+    const titre = await screen.findByRole("heading", { name: "Attestation définitive" });
+    const section = titre.closest(".surface") as HTMLElement;
+    expect(within(section).getByText("Demande acceptée.")).toBeInTheDocument();
+    expect(within(section).getByText("Attestation validée le")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument();
+
+    await user.click(within(section).getByRole("button", { name: "Prévisualiser" }));
+    await waitFor(() => expect(ouvertureOnglet).toHaveBeenCalledWith("blob:mock-url", "_blank"));
+    await user.click(within(section).getByRole("button", { name: "Télécharger" }));
+    await waitFor(() => expect(clicDeTelechargement?.download).toBe(`attestation-definitive-${ID_DEMANDE}.pdf`));
+    expect(pdf).toHaveBeenCalledTimes(2);
+  });
+
+  it("n'affiche aucune attestation définitive pour une demande refusée", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", motif_refus: "Hors périmètre." }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+    await screen.findByText("Tour Horizon");
+    expect(screen.queryByRole("heading", { name: "Attestation définitive" })).not.toBeInTheDocument();
   });
 });
