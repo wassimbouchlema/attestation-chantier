@@ -20,7 +20,9 @@ from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_uniq
 from .evaluation_risque import calculer_evaluation_risque
 from .html_sanitization import nettoyer_html
 from .models import (
+    DecisionDemande,
     Demande,
+    DemandeComplement,
     FormulaireRisque,
     Notification,
     PieceJustificative,
@@ -36,6 +38,7 @@ from .serializers import (
     CommentaireDistributeurSerializer,
     DemandeDetailSerializer,
     DemandeSerializer,
+    DemanderComplementsSerializer,
     EnvoyerDemandeSerializer,
     EvaluationRisqueSerializer,
     FormulaireRisqueSerializer,
@@ -43,6 +46,7 @@ from .serializers import (
     NotificationSerializer,
     PieceJustificativeSerializer,
     ProjetAttestationSerializer,
+    RefuserDemandeSerializer,
 )
 from .validation_envoi import valider_fdr_pret_a_envoyer
 
@@ -431,6 +435,64 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
 
     def get_queryset(self):
         return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
+
+    def _conflit_traitement(self, demande):
+        if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
+            return Response(
+                {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if demande.complements.filter(received_at__isnull=True).exists():
+            return Response(
+                {
+                    "code": "COMPLEMENTS_DEJA_DEMANDES",
+                    "detail": "Des compléments sont déjà demandés. Attendez la réponse du distributeur.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return None
+
+    @action(detail=True, methods=["post"], url_path="demander-complements")
+    def demander_complements(self, request, pk=None):
+        entree = DemanderComplementsSerializer(data=request.data)
+        entree.is_valid(raise_exception=True)
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            message = entree.validated_data["message"]
+            DemandeComplement.objects.create(demande=demande, message=message)
+            Notification.objects.create(
+                destinataire=demande.distributeur,
+                demande=demande,
+                type_notification=TypeNotification.COMPLEMENTS_DEMANDES,
+                titre="Compléments demandés",
+                message=message,
+            )
+            return Response(self.get_serializer(demande).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="refuser")
+    def refuser(self, request, pk=None):
+        entree = RefuserDemandeSerializer(data=request.data)
+        entree.is_valid(raise_exception=True)
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            demande.decision = DecisionDemande.REFUSEE
+            demande.motif_refus = entree.validated_data["motif"]
+            demande.statut = StatutDemande.TRAITE
+            demande.save(update_fields=["decision", "motif_refus", "statut", "updated_at"])
+            Notification.objects.create(
+                destinataire=demande.distributeur,
+                demande=demande,
+                type_notification=TypeNotification.DEMANDE_REFUSEE,
+                titre="Demande refusée",
+                message=demande.motif_refus,
+            )
+            return Response(self.get_serializer(demande).data)
 
     @action(detail=True, methods=["get"], url_path="pieces")
     def pieces(self, request, pk=None):

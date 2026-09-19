@@ -12,6 +12,11 @@ class StatutDemande(models.TextChoices):
     TRAITE = "TRAITE", "Traité"
 
 
+class DecisionDemande(models.TextChoices):
+    ACCEPTEE = "ACCEPTEE", "Acceptée"
+    REFUSEE = "REFUSEE", "Refusée"
+
+
 def chemin_upload_fdr_pdf(instance, filename):
     # Même principe que `chemin_upload_piece` : chemin de stockage opaque,
     # seule l'extension du nom fourni est reprise.
@@ -33,6 +38,8 @@ class Demande(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    decision = models.CharField(max_length=20, choices=DecisionDemande.choices, null=True, blank=True)
+    motif_refus = models.TextField(blank=True, default="")
 
     # Envoi au siège (Validation & envoi)
     commentaire_distributeur = models.TextField(blank=True, default="")
@@ -48,6 +55,23 @@ class Demande(models.Model):
             models.CheckConstraint(
                 condition=models.Q(statut__in=StatutDemande.values),
                 name="demande_statut_valide",
+            ),
+        ]
+
+
+class DemandeComplement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    demande = models.ForeignKey(Demande, on_delete=models.CASCADE, related_name="complements")
+    message = models.TextField()
+    requested_at = models.DateTimeField(auto_now_add=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["demande"],
+                condition=models.Q(received_at__isnull=True),
+                name="demande_complement_actif_unique",
             ),
         ]
 
@@ -174,6 +198,8 @@ class PieceJustificative(models.Model):
 class TypeNotification(models.TextChoices):
     DEMANDE_ENVOYEE = "DEMANDE_ENVOYEE", "Demande envoyée"
     RELANCE = "RELANCE", "Relance"
+    COMPLEMENTS_DEMANDES = "COMPLEMENTS_DEMANDES", "Compléments demandés"
+    DEMANDE_REFUSEE = "DEMANDE_REFUSEE", "Demande refusée"
 
 
 class Notification(models.Model):

@@ -1,0 +1,8 @@
+.siege-complement-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.siege-traitement-textarea .af-form__input-textarea {
+  width: 100%;
+}

@@ -1,9 +1,11 @@
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ErreurDemandeIntrouvable } from "../../api/demandes";
+import type { TraitementSiege } from "../../api/siege";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
-import { useDemandeSiege, useTelechargerFdrPdfSiege } from "../../features/siege/queries";
+import { useDemandeSiege, useTelechargerFdrPdfSiege, useTraiterDemandeSiege } from "../../features/siege/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
 
 export const useSiegeDemandeConsultationPage = () => {
@@ -15,6 +17,51 @@ export const useSiegeDemandeConsultationPage = () => {
 
   const demandeQuery = useDemandeSiege(demandeId);
   const telechargerPdfMutation = useTelechargerFdrPdfSiege(demandeId);
+  const traitementMutation = useTraiterDemandeSiege(demandeId);
+  const [actionTraitement, setActionTraitement] = useState<TraitementSiege["action"] | null>(null);
+  const [texteTraitement, setTexteTraitement] = useState("");
+  const [erreurSaisie, setErreurSaisie] = useState<string | null>(null);
+  const [messageSucces, setMessageSucces] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    if (actionTraitement) dialogRef.current?.showModal();
+  }, [actionTraitement]);
+
+  const ouvrirTraitement = (action: TraitementSiege["action"]) => {
+    traitementMutation.reset();
+    setErreurSaisie(null);
+    setTexteTraitement("");
+    setActionTraitement(action);
+  };
+
+  const fermerTraitement = () => {
+    if (!traitementMutation.isPending) setActionTraitement(null);
+  };
+
+  const confirmerTraitement = () => {
+    const texte = texteTraitement.trim();
+    if (!texte) {
+      setErreurSaisie(actionTraitement === "refuser" ? "Le motif est obligatoire." : "Le message est obligatoire.");
+      return;
+    }
+    if (!actionTraitement || traitementMutation.isPending) return;
+    traitementMutation.mutate(
+      actionTraitement === "refuser"
+        ? { action: "refuser", motif: texte }
+        : { action: "demander-complements", message: texte },
+      {
+        onSuccess: () => {
+          setActionTraitement(null);
+          if (actionTraitement === "refuser") {
+            navigate("/siege", { state: { successMessage: "Demande refusée." } });
+          } else {
+            setMessageSucces("La demande de compléments a été envoyée au distributeur.");
+          }
+        },
+      },
+    );
+  };
 
   const previsualiser = () => {
     telechargerPdfMutation.mutate(undefined, { onSuccess: ouvrirPdfDansUnNouvelOnglet });
@@ -35,6 +82,22 @@ export const useSiegeDemandeConsultationPage = () => {
     erreurChargement: demandeQuery.isError && !introuvable ? messageErreurAffichable(demandeQuery.error) : null,
     reessayerChargement: () => demandeQuery.refetch(),
     demande,
+    traitable: demande?.statut === "EN_COURS" && demande.decision === null && !demande.complement_actif,
+    actionTraitement,
+    ouvrirTraitement,
+    fermerTraitement,
+    confirmerTraitement,
+    texteTraitement,
+    changerTexteTraitement: (texte: string) => {
+      setTexteTraitement(texte);
+      setErreurSaisie(null);
+    },
+    erreurSaisie,
+    erreurTraitement: traitementMutation.isError ? messageErreurAffichable(traitementMutation.error) : null,
+    traitementEnCours: traitementMutation.isPending,
+    dialogRef,
+    messageSucces,
+    fermerMessageSucces: () => setMessageSucces(null),
 
     previsualiser,
     telecharger,

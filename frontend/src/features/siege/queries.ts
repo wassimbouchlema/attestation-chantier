@@ -1,7 +1,8 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listerDemandesSiege, recupererDemande, recupererFdrPdf } from "../../api/demandes";
 import { recupererFichierPieceSiege } from "../../api/pieces";
+import { traiterDemandeSiege, type TraitementSiege } from "../../api/siege";
 
 export const BASE_PATH_SIEGE = "/siege/demandes";
 
@@ -28,6 +29,20 @@ export const useDemandeSiege = (id: string | undefined) => {
   });
 };
 
+export const useTraiterDemandeSiege = (id: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (traitement: TraitementSiege) => traiterDemandeSiege(id, traitement),
+    onSuccess: (demande) => {
+      queryClient.setQueryData(siegeDemandesKeys.detail(id), demande);
+      void queryClient.invalidateQueries({ queryKey: siegeDemandesKeys.listes() });
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: siegeDemandesKeys.detail(id) });
+    },
+  });
+};
+
 /**
  * Mutation (pas une query), comme côté DISTRIBUTEUR : le PDF n'est récupéré
  * qu'au clic explicite (Prévisualiser/Télécharger), jamais mis en cache.
@@ -38,7 +53,6 @@ export const useTelechargerFdrPdfSiege = (demandeId: string) => {
   });
 };
 
-/** Idem, par pièce : `pieceId` est passé à `mutate()` (pas figé à la création du hook), une instance suffit par ligne. */
 export const useTelechargerFichierPieceSiege = (demandeId: string) => {
   return useMutation({
     mutationFn: (pieceId: string) => recupererFichierPieceSiege(demandeId, pieceId),

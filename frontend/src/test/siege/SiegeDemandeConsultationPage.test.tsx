@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -10,6 +10,7 @@ import type { EvaluationRisqueApi } from "../../api/evaluationRisque";
 import type { PiecesResponseApi } from "../../api/pieces";
 import { AuthProvider } from "../../features/auth/AuthProvider";
 import { SiegeDemandeConsultationPage } from "../../pages/SiegeDemandeConsultationPage/SiegeDemandeConsultationPage";
+import { SiegeHome } from "../../pages/SiegeHome/SiegeHome";
 import { createQueryClient } from "../../queryClient";
 import { server } from "../server";
 import { seedSession } from "../utils";
@@ -43,6 +44,9 @@ const demandeApi = (overrides: Partial<DemandeDetail> = {}): DemandeDetail => ({
   distributeur: 1,
   distributeur_nom: "Jean Dupont",
   statut: "EN_COURS",
+  decision: null,
+  motif_refus: "",
+  complement_actif: null,
   created_at: "2026-09-10T08:00:00Z",
   updated_at: "2026-09-12T10:30:00Z",
   envoye_at: "2026-09-17T12:15:00Z",
@@ -52,13 +56,13 @@ const demandeApi = (overrides: Partial<DemandeDetail> = {}): DemandeDetail => ({
   ...overrides,
 });
 
-const renderPage = () =>
+const renderPage = (accueilReel = false) =>
   render(
     <AuthProvider>
       <QueryClientProvider client={createQueryClient()}>
         <MemoryRouter initialEntries={[`/siege/demandes/${ID_DEMANDE}`]}>
           <Routes>
-            <Route path="/siege" element={<p>Demandes à traiter (page)</p>} />
+            <Route path="/siege" element={accueilReel ? <SiegeHome /> : <p>Demandes à traiter (page)</p>} />
             <Route path="/siege/demandes/:id" element={<SiegeDemandeConsultationPage />} />
           </Routes>
         </MemoryRouter>
@@ -122,7 +126,7 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.getByText("Dossier urgent, merci.")).toBeInTheDocument();
   });
 
-  it("aucune action de mutation (pas de bouton Créer/Modifier le projet, pas de Relancer)", async () => {
+  it("propose seulement les deux actions SIÈGE prévues", async () => {
     mockDemande(demandeApi());
     mockPieces(PIECES_COMPLETES);
     mockEvaluationRisque(EVALUATION);
@@ -132,6 +136,9 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.queryByRole("button", { name: /Relancer/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Créer le projet/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Modifier le projet/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Demander des compléments" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Accepter|Préparer l'attestation/ })).not.toBeInTheDocument();
   });
 
   it("ne consulte ni n'affiche le projet du distributeur", async () => {
@@ -250,6 +257,126 @@ describe("SiegeDemandeConsultationPage — actions sur une pièce", () => {
 
     await vi.waitFor(() => expect(clicDeTelechargement).not.toBeNull());
     expect(clicDeTelechargement?.download).toBe("note.pdf");
+  });
+});
+
+describe("SiegeDemandeConsultationPage — traitement", () => {
+  beforeEach(() => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+  });
+
+  const complement = {
+    id: "complement-1",
+    message: "Précisez la nature des travaux.",
+    requested_at: "2026-09-19T10:00:00Z",
+    received_at: null,
+  };
+
+  it("affiche les deux actions pour EN_COURS avec decision null et aucun complément", async () => {
+    mockDemande(demandeApi({ statut: "EN_COURS", decision: null, complement_actif: null }));
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: "Traitement de la demande" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Demander des compléments" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Refuser" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Compléments demandés" })).not.toBeInTheDocument();
+  });
+
+  it("valide le message puis envoie le complément, reste sur le détail et masque les actions", async () => {
+    const user = userEvent.setup();
+    const poster = vi.fn(async ({ request }: { request: Request }) => {
+      expect(await request.json()).toEqual({ message: complement.message });
+      return HttpResponse.json(demandeApi({ complement_actif: complement }), { status: 201 });
+    });
+    server.use(http.post("*/siege/demandes/:id/demander-complements/", poster));
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Demander des compléments" }));
+    const dialog = screen.getByRole("dialog", { name: "Demander des compléments" });
+    const champ = within(dialog).getByRole("textbox", { name: /Précisez les informations ou documents complémentaires attendus/ });
+    expect(champ).toBeRequired();
+    await user.type(champ, "   ");
+    await user.click(within(dialog).getByRole("button", { name: "Envoyer la demande de compléments" }));
+    expect(await screen.findByText("Le message est obligatoire.")).toBeInTheDocument();
+    expect(poster).not.toHaveBeenCalled();
+    await user.type(champ, complement.message);
+    await user.click(within(dialog).getByRole("button", { name: "Envoyer la demande de compléments" }));
+    expect(await screen.findByText("La demande de compléments a été envoyée au distributeur.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Compléments demandés" })).toBeInTheDocument();
+    expect(screen.getByText(complement.message)).toBeInTheDocument();
+    expect(screen.getByText(/Demandés le 19\/09\/2026/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Refuser" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Demander des compléments" })).not.toBeInTheDocument();
+    expect(screen.getByText("En cours")).toBeInTheDocument();
+    expect(poster).toHaveBeenCalledTimes(1);
+  });
+
+  it("affiche un complément déjà actif au chargement sans actions", async () => {
+    mockDemande(demandeApi({ complement_actif: complement }));
+    renderPage();
+    expect(await screen.findByText(complement.message)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Refuser" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Demander des compléments" })).not.toBeInTheDocument();
+  });
+
+  it("valide le motif, confirme le refus et revient à /siege avec un message fermable", async () => {
+    const user = userEvent.setup();
+    const poster = vi.fn(async ({ request }: { request: Request }) => {
+      expect(await request.json()).toEqual({ motif: "Risque non couvert" });
+      return HttpResponse.json(demandeApi({ decision: "REFUSEE", statut: "TRAITE", motif_refus: "Risque non couvert" }));
+    });
+    server.use(
+      http.post("*/siege/demandes/:id/refuser/", poster),
+      http.get("*/siege/demandes/", () => HttpResponse.json({ count: 0, results: [], next: null, previous: null })),
+    );
+    renderPage(true);
+    await user.click(await screen.findByRole("button", { name: "Refuser" }));
+    const dialog = screen.getByRole("dialog", { name: "Refuser la demande" });
+    expect(within(dialog).getByText(/Confirmez le refus/)).toBeInTheDocument();
+    const champ = within(dialog).getByRole("textbox", { name: /Motif du refus/ });
+    expect(champ).toBeRequired();
+    await user.type(champ, "   ");
+    await user.click(within(dialog).getByRole("button", { name: "Confirmer le refus" }));
+    expect(await screen.findByText("Le motif est obligatoire.")).toBeInTheDocument();
+    expect(poster).not.toHaveBeenCalled();
+    await user.type(champ, "Risque non couvert  ");
+    await user.click(within(dialog).getByRole("button", { name: "Confirmer le refus" }));
+    expect(await screen.findByRole("heading", { name: /^Demandes à traiter/ })).toBeInTheDocument();
+    expect(screen.getByText("Demande refusée.")).toBeInTheDocument();
+    expect(await screen.findByText("Aucune demande pour le moment.")).toBeInTheDocument();
+    expect(poster).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Fermer" }));
+    expect(screen.queryByText("Demande refusée.")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["Demander des compléments", "demander-complements", "Envoyer la demande de compléments"],
+    ["Refuser", "refuser", "Confirmer le refus"],
+  ])("affiche proprement le conflit 409 pour %s", async (bouton, action, confirmation) => {
+    const user = userEvent.setup();
+    const detail = "Des compléments sont déjà demandés. Attendez la réponse du distributeur.";
+    server.use(http.post(`*/siege/demandes/:id/${action}/`, () => HttpResponse.json(
+      { code: "COMPLEMENTS_DEJA_DEMANDES", detail }, { status: 409 },
+    )));
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: bouton }));
+    await user.type(within(screen.getByRole("dialog")).getByRole("textbox"), "Texte");
+    await user.click(screen.getByRole("button", { name: confirmation }));
+    expect(await screen.findByText(detail)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByText("Demande refusée.")).not.toBeInTheDocument();
+  });
+
+  it("annule une modale sans envoyer de requête", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole("button", { name: "Refuser" }));
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
   });
 });
 

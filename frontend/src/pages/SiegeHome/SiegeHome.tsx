@@ -1,4 +1,4 @@
-import { Button, EditorialMessage, Loader, MainContainer } from "@axa-fr/canopee-react/distributeur";
+import { Button, EditorialMessage, Loader, MainContainer, Message } from "@axa-fr/canopee-react/distributeur";
 import assignmentIcon from "@material-symbols/svg-400/outlined/assignment.svg";
 
 import { SiegeDemandesTable } from "../../features/siege/components/SiegeDemandesTable/SiegeDemandesTable";
@@ -9,8 +9,10 @@ import { useSiegeHome } from "./useSiegeHome";
 
 export const SiegeHome = () => {
   useDocumentTitle("Demandes à traiter");
-  const { page, nombreDePages, demandes, isLoading, erreurChargement, reessayerChargement, changerPage } =
-    useSiegeHome();
+  const {
+    page, nombreDePages, demandes, isLoading, erreurChargement,
+    reessayerChargement, changerPage, messageSucces, fermerMessageSucces,
+  } = useSiegeHome();
 
   return (
     <>
@@ -20,6 +22,9 @@ export const SiegeHome = () => {
       />
       <MainContainer>
         <div className="container-fluid app-shell__content">
+          {messageSucces && (
+            <Message variant="success" title={messageSucces} onClose={fermerMessageSucces} closeButtonAriaLabel="Fermer" />
+          )}
           {isLoading && <Loader mode="get">{null}</Loader>}
 
           {!isLoading && erreurChargement && (

@@ -4,7 +4,10 @@ from rest_framework import serializers
 
 from .evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
 from .html_sanitization import nettoyer_html
-from .models import Demande, FormulaireRisque, Notification, PieceJustificative, ProjetAttestation, TypeChantier, Usage
+from .models import (
+    Demande, DemandeComplement, FormulaireRisque, Notification,
+    PieceJustificative, ProjetAttestation, TypeChantier, Usage,
+)
 from .rules import TYPES_PIECES_AUTORISES
 
 EXTENSIONS_PIECES_AUTORISEES = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -103,12 +106,35 @@ class FormulaireRisqueSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class DemandeComplementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DemandeComplement
+        fields = ["id", "message", "requested_at", "received_at"]
+        read_only_fields = fields
+
+
+class DemanderComplementsSerializer(serializers.Serializer):
+    message = serializers.CharField(trim_whitespace=True, allow_blank=False)
+
+
+class RefuserDemandeSerializer(serializers.Serializer):
+    motif = serializers.CharField(trim_whitespace=True, allow_blank=False)
+
+
 class DemandeDetailSerializer(DemandeSerializer):
     fdr = FormulaireRisqueSerializer(read_only=True)
     distributeur_nom = serializers.SerializerMethodField()
+    complement_actif = serializers.SerializerMethodField()
 
     class Meta(DemandeSerializer.Meta):
-        fields = DemandeSerializer.Meta.fields + ["commentaire_distributeur", "fdr", "distributeur_nom"]
+        fields = DemandeSerializer.Meta.fields + [
+            "commentaire_distributeur", "fdr", "distributeur_nom", "decision", "motif_refus", "complement_actif",
+        ]
+        read_only_fields = fields
+
+    def get_complement_actif(self, demande):
+        complement = demande.complements.filter(received_at__isnull=True).first()
+        return DemandeComplementSerializer(complement).data if complement else None
 
     def get_distributeur_nom(self, demande):
         return demande.distributeur.get_full_name() or demande.distributeur.get_username()

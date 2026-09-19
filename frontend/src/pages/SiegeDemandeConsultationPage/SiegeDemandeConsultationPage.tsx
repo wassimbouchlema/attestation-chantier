@@ -1,4 +1,7 @@
-import { Button, Loader, MainContainer, Message, Restitution, Tag, Title } from "@axa-fr/canopee-react/distributeur";
+import {
+  Button, Loader, MainContainer, Message, Modal, ModalBody, ModalFooter,
+  ModalHeader, Restitution, Tag, TextareaInput, Title,
+} from "@axa-fr/canopee-react/distributeur";
 
 import { LIBELLE_STATUT, VARIANT_STATUT } from "../../features/demandes/constants/statutLabel";
 import { RecapitulatifFdr } from "../../features/fdr/components/RecapitulatifFdr/RecapitulatifFdr";
@@ -10,6 +13,7 @@ import { formatDateHeure } from "../../helpers/formatDateHeure";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
 import { useSiegeDemandeConsultationPage } from "./useSiegeDemandeConsultationPage";
+import "./SiegeDemandeConsultationPage.css";
 
 export const SiegeDemandeConsultationPage = () => {
   const {
@@ -24,6 +28,19 @@ export const SiegeDemandeConsultationPage = () => {
     erreurPdf,
     fermerErreurPdf,
     retournerAuxDemandes,
+    traitable,
+    actionTraitement,
+    ouvrirTraitement,
+    fermerTraitement,
+    confirmerTraitement,
+    texteTraitement,
+    changerTexteTraitement,
+    erreurSaisie,
+    erreurTraitement,
+    traitementEnCours,
+    dialogRef,
+    messageSucces,
+    fermerMessageSucces,
   } = useSiegeDemandeConsultationPage();
 
   return (
@@ -97,6 +114,35 @@ export const SiegeDemandeConsultationPage = () => {
                 </Button>
               </Surface>
 
+              <Surface>
+                <Title heading="h2">Traitement de la demande</Title>
+                {messageSucces && (
+                  <Message
+                    variant="success"
+                    title={messageSucces}
+                    onClose={fermerMessageSucces}
+                    closeButtonAriaLabel="Fermer"
+                  />
+                )}
+                {demande.complement_actif && (
+                  <div>
+                    <Title heading="h3">Compléments demandés</Title>
+                    <p className="siege-complement-message">{demande.complement_actif.message}</p>
+                    <p>Demandés le {formatDateHeure(demande.complement_actif.requested_at)}</p>
+                  </div>
+                )}
+                {traitable && (
+                  <div className="fdr-actions-globales">
+                    <Button variant="secondary" onClick={() => ouvrirTraitement("demander-complements")}>
+                      Demander des compléments
+                    </Button>
+                    <Button variant="danger" onClick={() => ouvrirTraitement("refuser")}>
+                      Refuser
+                    </Button>
+                  </div>
+                )}
+              </Surface>
+
               <div className="fdr-actions-globales">
                 <Button variant="secondary" onClick={retournerAuxDemandes}>
                   Retour aux demandes
@@ -106,6 +152,53 @@ export const SiegeDemandeConsultationPage = () => {
           )}
         </div>
       </MainContainer>
+      {actionTraitement && (
+        <Modal
+          ref={dialogRef}
+          title={actionTraitement === "refuser" ? "Refuser la demande" : "Demander des compléments"}
+          onOutsideTap={fermerTraitement}
+          onCancel={(event) => {
+            event.preventDefault();
+            fermerTraitement();
+          }}
+        >
+          <ModalHeader onCancel={fermerTraitement} closeButtonAriaLabel="Fermer">
+            {actionTraitement === "refuser" ? "Refuser la demande" : "Demander des compléments"}
+          </ModalHeader>
+          <ModalBody>
+            {actionTraitement === "refuser" && <p>Confirmez le refus de cette demande. Elle sera marquée comme traitée.</p>}
+            <TextareaInput
+              id="texte-traitement"
+              className="siege-traitement-textarea"
+              classNameContainerLabel="col-12"
+              classNameContainerInput="col-12"
+              label={actionTraitement === "refuser"
+                ? "Motif du refus"
+                : "Précisez les informations ou documents complémentaires attendus."}
+              required
+              rows={6}
+              style={{ resize: "vertical" }}
+              value={texteTraitement}
+              onChange={(event) => changerTexteTraitement(event.target.value)}
+              disabled={traitementEnCours}
+            />
+            {erreurSaisie && <Message variant="error" title={erreurSaisie} />}
+            {erreurTraitement && <Message variant="error" title={erreurTraitement} />}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" onClick={fermerTraitement} disabled={traitementEnCours}>
+              Annuler
+            </Button>
+            <Button
+              variant={actionTraitement === "refuser" ? "danger" : "primary"}
+              onClick={confirmerTraitement}
+              disabled={traitementEnCours}
+            >
+              {actionTraitement === "refuser" ? "Confirmer le refus" : "Envoyer la demande de compléments"}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
     </>
   );
 };

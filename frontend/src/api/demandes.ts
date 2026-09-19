@@ -69,6 +69,14 @@ export interface DemandeDetail extends Demande {
   commentaire_distributeur: string;
   fdr: FormulaireRisqueApi;
   distributeur_nom?: string;
+  decision?: "ACCEPTEE" | "REFUSEE" | null;
+  motif_refus?: string;
+  complement_actif?: {
+    id: string;
+    message: string;
+    requested_at: string;
+    received_at: string | null;
+  } | null;
 }
 
 export interface DemandesPaginees {
