@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "jest-axe";
 import { HttpResponse, delay, http } from "msw";
@@ -49,6 +49,8 @@ const creerDemande = (overrides: Partial<Demande> = {}): Demande => ({
   updated_at: "2026-09-11T08:00:00Z",
   envoye_at: null,
   last_relance_at: null,
+  assure_nom: "Assuré démo",
+  chantier_nom: "Chantier démo",
   ...overrides,
 });
 
@@ -380,12 +382,27 @@ describe("DistributeurHome — décision et suivi", () => {
   const mockListe = (demandes: Demande[]) =>
     server.use(http.get("*/demandes/", () => HttpResponse.json(paginer(demandes))));
 
+  it("affiche l'assuré et le chantier de chaque demande, « — » si le FDR est vide", async () => {
+    mockListe([
+      creerDemande({ assure_nom: "AXA Construction", chantier_nom: "Tour Horizon" }),
+      creerDemande({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", assure_nom: "", chantier_nom: "" }),
+    ]);
+    renderPage();
+
+    expect(await screen.findByRole("cell", { name: "AXA Construction" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Tour Horizon" })).toBeInTheDocument();
+    const lignes = screen.getAllByRole("row").slice(1);
+    expect(within(lignes[1]).getAllByRole("cell", { name: "—" })).toHaveLength(3);
+  });
+
   it("affiche la colonne Décision, sans Dernière modification", async () => {
     mockListe([brouillon, enCours, acceptee, refusee]);
     renderPage();
     await screen.findByRole("cell", { name: "Acceptée" });
 
     expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+      "Assuré",
+      "Chantier",
       "Statut",
       "Décision",
       "Date de création",

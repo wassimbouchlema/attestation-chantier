@@ -7,14 +7,24 @@ from .siege import DemandeComplementSerializer
 
 class DemandeSerializer(serializers.ModelSerializer):
     attestation_finale = serializers.SerializerMethodField()
+    assure_nom = serializers.SerializerMethodField()
+    chantier_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = Demande
         fields = [
             "id", "distributeur", "statut", "decision", "created_at", "updated_at", "envoye_at", "last_relance_at",
-            "attestation_finale",
+            "attestation_finale", "assure_nom", "chantier_nom",
         ]
         read_only_fields = fields
+
+    def get_assure_nom(self, demande):
+        fdr = getattr(demande, "fdr", None)
+        return fdr.assure_nom if fdr else ""
+
+    def get_chantier_nom(self, demande):
+        fdr = getattr(demande, "fdr", None)
+        return fdr.chantier_nom if fdr else ""
 
     def get_attestation_finale(self, demande):
         attestation = getattr(demande, "attestation", None)

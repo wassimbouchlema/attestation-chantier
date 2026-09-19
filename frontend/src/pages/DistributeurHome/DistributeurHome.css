@@ -1,0 +1,11 @@
+.distributeur-home__liste {
+  margin-inline: auto;
+  max-width: 80rem;
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .distributeur-home__liste {
+    width: 80%;
+  }
+}

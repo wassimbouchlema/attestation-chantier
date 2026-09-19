@@ -50,7 +50,7 @@ export const FdrNouvelleDemandePage = () => {
         <FdrStepper />
       </div>
       <MainContainer>
-        <div className="container app-shell__content">
+        <div className="container-fluid app-shell__content">
           {messageGlobal && (
             <div ref={messageGlobalRef} tabIndex={-1}>
               <Message

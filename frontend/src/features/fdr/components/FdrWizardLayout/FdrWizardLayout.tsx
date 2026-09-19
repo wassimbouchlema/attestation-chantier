@@ -32,7 +32,7 @@ export const FdrWizardLayout = () => {
         <FdrStepper />
       </div>
       <MainContainer>
-        <div className="container app-shell__content">
+        <div className="container-fluid app-shell__content">
           {isLoading && <Loader mode="get">{null}</Loader>}
 
           {!isLoading && introuvable && (

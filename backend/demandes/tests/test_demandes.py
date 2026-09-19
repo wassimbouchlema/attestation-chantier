@@ -5,9 +5,10 @@ from pathlib import Path
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -359,6 +360,23 @@ class DemandeEndpointTests(APITestCase):
         response = self.client.get(reverse("demande-list"), {"complements": "TOUS"})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_liste_expose_assure_et_chantier_sans_requete_par_ligne(self):
+        for indice in range(4):
+            demande = Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.BROUILLON)
+            FormulaireRisque.objects.create(
+                demande=demande, assure_nom=f"Assuré {indice}", chantier_nom=f"Chantier {indice}"
+            )
+        Demande.objects.create(distributeur=self.distributeur_a, statut=StatutDemande.BROUILLON)
+        self._authentifier(self.distributeur_a)
+
+        with CaptureQueriesContext(connection) as requetes:
+            resultats = self.client.get(reverse("demande-list")).data["results"]
+
+        noms = {(d["assure_nom"], d["chantier_nom"]) for d in resultats}
+        self.assertIn(("Assuré 2", "Chantier 2"), noms)
+        self.assertIn(("", ""), noms)
+        self.assertLessEqual(len(requetes), 6)
 
     def test_filtre_decision_invalide_retourne_400(self):
         self._authentifier(self.distributeur_a)

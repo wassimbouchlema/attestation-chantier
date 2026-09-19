@@ -122,7 +122,7 @@ class DemandeViewSet(
                 queryset = queryset.filter(
                     a_des_complements if complements == COMPLEMENTS_DEMANDES else ~a_des_complements
                 )
-            queryset = queryset.select_related("attestation")
+            queryset = queryset.select_related("attestation", "fdr")
 
         return queryset
 

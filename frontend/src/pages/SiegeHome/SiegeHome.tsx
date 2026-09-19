@@ -18,6 +18,7 @@ export const SiegeHome = () => {
     <>
       <PageHeader
         title="Demandes à traiter"
+        sansAccueil
         subtitle="Consultez et traitez les demandes d'attestation transmises par les distributeurs."
       />
       <MainContainer>

@@ -1,7 +1,33 @@
+.demandes-table {
+  contain: inline-size;
+  overflow-x: auto;
+}
+
+.demandes-table__col-identite {
+  width: 17%;
+}
+
+.demandes-table__col-statut,
+.demandes-table__col-decision {
+  width: 10%;
+}
+
+.demandes-table__col-date {
+  width: 13%;
+}
+
+.demandes-table__col-statut,
+.demandes-table__col-decision,
+.demandes-table__col-date,
+.demandes-table__cell-centre {
+  text-align: center;
+}
+
 .demandes-table__actions {
   align-items: center;
   display: flex;
-  gap: 0.5rem;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
 }
 
 @media (min-width: 768px) {
@@ -11,7 +37,11 @@
   }
 }
 
-.demandes-table__col-actions {
-  white-space: nowrap;
-  width: 1%;
+@media (max-width: 480px) {
+  .demandes-table .af-table__cell,
+  .demandes-table .af-table__header-cell,
+  .demandes-table th {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
 }

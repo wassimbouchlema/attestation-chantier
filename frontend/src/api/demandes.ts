@@ -25,6 +25,8 @@ export interface Demande {
   distributeur: number;
   statut: StatutDemande;
   decision?: DecisionDemande | null;
+  assure_nom?: string;
+  chantier_nom?: string;
   attestation_finale?: { validated_at: string | null } | null;
   created_at: string;
   updated_at: string;

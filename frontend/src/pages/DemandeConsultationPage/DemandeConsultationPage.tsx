@@ -1,5 +1,6 @@
 import { Button, Loader, MainContainer, Message, Restitution, Tag, Title } from "@axa-fr/canopee-react/distributeur";
 
+import { LIBELLE_DECISION } from "../../features/demandes/constants/optionsDecision";
 import { LIBELLE_STATUT, VARIANT_STATUT } from "../../features/demandes/constants/statutLabel";
 import { RecapitulatifFdr } from "../../features/fdr/components/RecapitulatifFdr/RecapitulatifFdr";
 import { SyntheseDossierPieces } from "../../features/fdr/components/SyntheseDossierPieces/SyntheseDossierPieces";
@@ -7,6 +8,8 @@ import { SyntheseRisque } from "../../features/fdr/components/SyntheseRisque/Syn
 import { formatDateHeure } from "../../helpers/formatDateHeure";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
+import { ComplementsDemandes } from "./ComplementsDemandes";
+import "./DemandeConsultationPage.css";
 import { useDemandeConsultationPage } from "./useDemandeConsultationPage";
 
 export const DemandeConsultationPage = () => {
@@ -87,18 +90,6 @@ export const DemandeConsultationPage = () => {
               {demande.envoye_at && (
                 <Surface>
                   <Title heading="h2">Suivi de la demande</Title>
-                  <div className="fdr-step-contenu fdr-step-contenu--restitution">
-                    <Restitution label="Envoyée le">{formatDateHeure(demande.envoye_at)}</Restitution>
-                    <Restitution label="Dernière relance">
-                      {demande.last_relance_at ? formatDateHeure(demande.last_relance_at) : "Aucune"}
-                    </Restitution>
-                    {prochaineRelance && demande.statut === "EN_COURS" && (
-                      <Restitution label="Nouvelle relance possible le">
-                        {formatDateHeure(prochaineRelance.toISOString())}
-                      </Restitution>
-                    )}
-                  </div>
-
                   {erreurRelance && (
                     <Message
                       variant="error"
@@ -108,12 +99,83 @@ export const DemandeConsultationPage = () => {
                     />
                   )}
 
-                  {demande.statut === "EN_COURS" && (
-                    <Button variant="secondary" onClick={relancer} disabled={relanceDisabled}>
-                      {relanceEnCours ? "Relance en cours…" : "Relancer le siège"}
-                    </Button>
-                  )}
+                  <div className="consultation-document">
+                    <div className="fdr-step-contenu fdr-step-contenu--restitution consultation-document__infos">
+                      <Restitution label="Envoyée le">{formatDateHeure(demande.envoye_at)}</Restitution>
+                      <Restitution label="Dernière relance">
+                        {demande.last_relance_at ? formatDateHeure(demande.last_relance_at) : "Aucune"}
+                      </Restitution>
+                      {prochaineRelance && demande.statut === "EN_COURS" && (
+                        <Restitution label="Nouvelle relance possible le">
+                          {formatDateHeure(prochaineRelance.toISOString())}
+                        </Restitution>
+                      )}
+                    </div>
+                    {demande.statut === "EN_COURS" && (
+                      <div className="consultation-document__actions">
+                        <Button variant="secondary" onClick={relancer} disabled={relanceDisabled}>
+                          {relanceEnCours ? "Relance en cours…" : "Relancer le siège"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </Surface>
+              )}
+
+              {demande.complement_actif && demande.statut !== "TRAITE" && (
+                <ComplementsDemandes complement={demande.complement_actif} />
+              )}
+
+              {demande.statut === "TRAITE" && demande.decision && (
+                <Surface>
+                  <Title heading="h2">Décision du siège</Title>
+                  <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                    <Restitution label="Décision">
+                      <Tag variant="default">{LIBELLE_DECISION[demande.decision]}</Tag>
+                    </Restitution>
+                    {demande.decision === "REFUSEE" && (
+                      <Restitution label="Motif du refus">
+                        <span className="consultation-multiligne">{demande.motif_refus}</span>
+                      </Restitution>
+                    )}
+                  </div>
+                </Surface>
+              )}
+
+              {demande.decision === "ACCEPTEE" && demande.attestation_finale && (
+                <Surface>
+                  <Title heading="h2">Attestation définitive</Title>
+                  {erreurAttestationFinale && (
+                    <Message
+                      variant="error"
+                      title={erreurAttestationFinale}
+                      onClose={fermerErreurAttestationFinale}
+                      closeButtonAriaLabel="Fermer"
+                    />
+                  )}
+                  <div className="consultation-document">
+                    <div className="fdr-step-contenu fdr-step-contenu--restitution consultation-document__infos">
+                      <Restitution label="Statut">Demande acceptée</Restitution>
+                      {demande.attestation_finale.validated_at && (
+                        <Restitution label="Date de validation">
+                          {formatDateHeure(demande.attestation_finale.validated_at)}
+                        </Restitution>
+                      )}
+                    </div>
+                    <div className="consultation-document__actions">
+                      <Button variant="secondary" onClick={previsualiserAttestationFinale} disabled={attestationFinaleEnCours}>
+                        Prévisualiser
+                      </Button>
+                      <Button variant="primary" onClick={telechargerAttestationFinale} disabled={attestationFinaleEnCours}>
+                        Télécharger
+                      </Button>
+                    </div>
+                  </div>
+                </Surface>
+              )}
+
+              {demande.complement_actif && demande.statut === "TRAITE" && (
+                <ComplementsDemandes complement={demande.complement_actif} />
               )}
 
               <RecapitulatifFdr fdr={demande.fdr} />
@@ -127,61 +189,27 @@ export const DemandeConsultationPage = () => {
                 </Surface>
               )}
 
-              {demande.complement_actif && (
-                <Surface>
-                  <Title heading="h2">Compléments demandés par le siège</Title>
-                  <div className="fdr-step-contenu fdr-step-contenu--restitution">
-                    <Restitution label="Demandés le">
-                      {formatDateHeure(demande.complement_actif.requested_at)}
-                    </Restitution>
-                  </div>
-                  <p>{demande.complement_actif.message}</p>
-                </Surface>
-              )}
-
               <Surface>
                 <Title heading="h2">Document transmis</Title>
-                <p>Formulaire de déclaration du risque</p>
                 {erreurPdf && (
                   <Message variant="error" title={erreurPdf} onClose={fermerErreurPdf} closeButtonAriaLabel="Fermer" />
                 )}
-                <Button variant="secondary" onClick={previsualiser} disabled={pdfEnCours}>
-                  Prévisualiser
-                </Button>
-                <Button variant="primary" onClick={telecharger} disabled={pdfEnCours}>
-                  Télécharger
-                </Button>
+                <div className="consultation-document">
+                  <div className="fdr-step-contenu fdr-step-contenu--restitution consultation-document__infos">
+                    <Restitution label="Document">Formulaire de déclaration du risque</Restitution>
+                  </div>
+                  <div className="consultation-document__actions">
+                    <Button variant="secondary" onClick={previsualiser} disabled={pdfEnCours}>
+                      Prévisualiser
+                    </Button>
+                    <Button variant="primary" onClick={telecharger} disabled={pdfEnCours}>
+                      Télécharger
+                    </Button>
+                  </div>
+                </div>
               </Surface>
 
-              {demande.decision === "ACCEPTEE" && demande.attestation_finale && (
-                <Surface>
-                  <Title heading="h2">Attestation définitive</Title>
-                  <p>Demande acceptée.</p>
-                  {demande.attestation_finale.validated_at && (
-                    <div className="fdr-step-contenu fdr-step-contenu--restitution">
-                      <Restitution label="Attestation validée le">
-                        {formatDateHeure(demande.attestation_finale.validated_at)}
-                      </Restitution>
-                    </div>
-                  )}
-                  {erreurAttestationFinale && (
-                    <Message
-                      variant="error"
-                      title={erreurAttestationFinale}
-                      onClose={fermerErreurAttestationFinale}
-                      closeButtonAriaLabel="Fermer"
-                    />
-                  )}
-                  <Button variant="secondary" onClick={previsualiserAttestationFinale} disabled={attestationFinaleEnCours}>
-                    Prévisualiser
-                  </Button>
-                  <Button variant="primary" onClick={telechargerAttestationFinale} disabled={attestationFinaleEnCours}>
-                    Télécharger
-                  </Button>
-                </Surface>
-              )}
-
-              {demande.statut !== "BROUILLON" && !demande.attestation_finale && (
+              {demande.statut === "EN_COURS" && (
                 <Surface>
                   <Title heading="h2">Projet d'attestation</Title>
 
@@ -189,7 +217,6 @@ export const DemandeConsultationPage = () => {
 
                   {!projetEnChargement && !projet && demande.statut === "EN_COURS" && (
                     <>
-                      <p>Préparez un projet d'attestation à partir des informations du FDR.</p>
                       {erreurCreationProjet && (
                         <Message
                           variant="error"
@@ -198,21 +225,30 @@ export const DemandeConsultationPage = () => {
                           closeButtonAriaLabel="Fermer"
                         />
                       )}
-                      <Button variant="secondary" onClick={creerProjet} disabled={creationProjetEnCours}>
-                        {creationProjetEnCours ? "Création…" : "Créer le projet"}
-                      </Button>
+                      <div className="consultation-document">
+                        <p className="consultation-document__infos">
+                          Préparez un projet d'attestation à partir des informations du FDR.
+                        </p>
+                        <div className="consultation-document__actions">
+                          <Button variant="secondary" onClick={creerProjet} disabled={creationProjetEnCours}>
+                            {creationProjetEnCours ? "Création…" : "Créer le projet"}
+                          </Button>
+                        </div>
+                      </div>
                     </>
                   )}
 
                   {!projetEnChargement && projet && (
-                    <>
-                      <div className="fdr-step-contenu fdr-step-contenu--restitution">
+                    <div className="consultation-document">
+                      <div className="fdr-step-contenu fdr-step-contenu--restitution consultation-document__infos">
                         <Restitution label="Dernière modification">{formatDateHeure(projet.updated_at)}</Restitution>
                       </div>
-                      <Button variant="secondary" onClick={modifierProjet}>
-                        Modifier le projet
-                      </Button>
-                    </>
+                      <div className="consultation-document__actions">
+                        <Button variant="secondary" onClick={modifierProjet}>
+                          Modifier le projet
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </Surface>
               )}

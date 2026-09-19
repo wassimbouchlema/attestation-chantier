@@ -6,6 +6,7 @@ import { DemandesTable } from "../../features/demandes/components/DemandesTable/
 import { SupprimerBrouillonModal } from "../../features/demandes/components/SupprimerBrouillonModal/SupprimerBrouillonModal";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
+import "./DistributeurHome.css";
 import { useDistributeurHome } from "./useDistributeurHome";
 
 export const DistributeurHome = () => {
@@ -42,6 +43,7 @@ export const DistributeurHome = () => {
     <>
       <PageHeader
         title="Mes demandes"
+        sansAccueil
         subtitle="Suivez et gérez vos demandes d'attestation de chantier."
         actions={
           <Button variant="primary" onClick={creerDemande}>
@@ -77,53 +79,55 @@ export const DistributeurHome = () => {
             />
           )}
 
-          <DemandesFiltres
-            filtres={filtres}
-            onStatutChange={changerStatut}
-            onDecisionChange={changerDecision}
-            onComplementsChange={changerComplements}
-          />
-
-          {isLoading && <Loader mode="get">{null}</Loader>}
-
-          {!isLoading && erreurChargement && (
-            <Surface>
-              <div role="alert">
-                <p>{erreurChargement}</p>
-                <Button variant="secondary" onClick={reessayerChargement}>
-                  Réessayer
-                </Button>
-              </div>
-            </Surface>
-          )}
-
-          {!isLoading && !erreurChargement && demandes.length === 0 && aucunFiltre && (
-            <Surface>
-              <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande pour le moment.">
-                Les demandes que vous créez apparaîtront ici.
-              </EditorialMessage>
-            </Surface>
-          )}
-
-          {!isLoading && !erreurChargement && demandes.length === 0 && !aucunFiltre && (
-            <Surface>
-              <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande ne correspond à ce filtre.">
-                Essayez d'autres filtres.
-              </EditorialMessage>
-            </Surface>
-          )}
-
-          {!isLoading && !erreurChargement && demandes.length > 0 && (
-            <DemandesTable
-              demandes={demandes}
-              page={page}
-              nombreDePages={nombreDePages}
-              onPageChange={changerPage}
-              onSupprimer={ouvrirSuppression}
-              onTelechargerAttestation={telechargerAttestation}
-              attestationEnCours={attestationEnCours}
+          <div className="distributeur-home__liste">
+            <DemandesFiltres
+              filtres={filtres}
+              onStatutChange={changerStatut}
+              onDecisionChange={changerDecision}
+              onComplementsChange={changerComplements}
             />
-          )}
+
+            {isLoading && <Loader mode="get">{null}</Loader>}
+
+            {!isLoading && erreurChargement && (
+              <Surface>
+                <div role="alert">
+                  <p>{erreurChargement}</p>
+                  <Button variant="secondary" onClick={reessayerChargement}>
+                    Réessayer
+                  </Button>
+                </div>
+              </Surface>
+            )}
+
+            {!isLoading && !erreurChargement && demandes.length === 0 && aucunFiltre && (
+              <Surface>
+                <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande pour le moment.">
+                  Les demandes que vous créez apparaîtront ici.
+                </EditorialMessage>
+              </Surface>
+            )}
+
+            {!isLoading && !erreurChargement && demandes.length === 0 && !aucunFiltre && (
+              <Surface>
+                <EditorialMessage type="information" icon={assignmentIcon} title="Aucune demande ne correspond à ce filtre.">
+                  Essayez d'autres filtres.
+                </EditorialMessage>
+              </Surface>
+            )}
+
+            {!isLoading && !erreurChargement && demandes.length > 0 && (
+              <DemandesTable
+                demandes={demandes}
+                page={page}
+                nombreDePages={nombreDePages}
+                onPageChange={changerPage}
+                onSupprimer={ouvrirSuppression}
+                onTelechargerAttestation={telechargerAttestation}
+                attestationEnCours={attestationEnCours}
+              />
+            )}
+          </div>
         </div>
       </MainContainer>
 

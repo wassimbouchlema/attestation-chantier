@@ -494,8 +494,9 @@ describe("DemandeConsultationPage — attestation définitive", () => {
 
     const titre = await screen.findByRole("heading", { name: "Attestation définitive" });
     const section = titre.closest(".surface") as HTMLElement;
-    expect(within(section).getByText("Demande acceptée.")).toBeInTheDocument();
-    expect(within(section).getByText("Attestation validée le")).toBeInTheDocument();
+    expect(within(section).getByText("Statut")).toBeInTheDocument();
+    expect(within(section).getByText("Demande acceptée")).toBeInTheDocument();
+    expect(within(section).getByText("Date de validation")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument();
 
     await user.click(within(section).getByRole("button", { name: "Prévisualiser" }));
@@ -512,5 +513,198 @@ describe("DemandeConsultationPage — attestation définitive", () => {
     renderPage();
     await screen.findByText("Tour Horizon");
     expect(screen.queryByRole("heading", { name: "Attestation définitive" })).not.toBeInTheDocument();
+  });
+
+  it("acceptée : affiche la décision Acceptée sans motif, entre le suivi et le récapitulatif FDR", async () => {
+    mockDemande(acceptee());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    const decision = await screen.findByRole("heading", { name: "Décision du siège" });
+    const section = decision.closest(".surface") as HTMLElement;
+    expect(within(section).getByText("Acceptée")).toBeInTheDocument();
+    expect(screen.queryByText("Motif du refus")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Attestation définitive" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument();
+    const ordre = ["Suivi de la demande", "Décision du siège", "Attestation définitive", "Récapitulatif des informations",
+      "Pièces justificatives", "Évaluation automatique du risque", "Document transmis"];
+    const titres = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(titres.filter((t) => ordre.includes(t ?? ""))).toEqual(ordre);
+  });
+});
+
+describe("DemandeConsultationPage — décision de refus", () => {
+  const motif = "Chantier hors périmètre.\nMerci de déposer une nouvelle demande.";
+
+  it("affiche la décision et le motif multiligne en lecture seule, sans attestation définitive", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", motif_refus: motif }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    const titre = await screen.findByRole("heading", { name: "Décision du siège" });
+    const section = titre.closest(".surface") as HTMLElement;
+    expect(within(section).getByText("Refusée")).toBeInTheDocument();
+    expect(within(section).getByText("Motif du refus")).toBeInTheDocument();
+    const texteMotif = within(section).getByText(/Chantier hors périmètre\./);
+    expect(texteMotif.textContent).toBe(motif);
+    expect(texteMotif).toHaveClass("consultation-multiligne");
+    expect(within(section).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(section).queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Attestation définitive" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument();
+  });
+
+  it("refusée : masque totalement le projet d'attestation, même existant", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", motif_refus: "Refus." }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation({
+      contenu_html: "<p>x</p>", created_at: "2026-09-13T08:00:00Z", updated_at: "2026-09-14T08:00:00Z",
+    });
+    renderPage();
+
+    const decision = await screen.findByRole("heading", { name: "Décision du siège" });
+    const recap = screen.getByRole("heading", { name: "Récapitulatif des informations" });
+    expect(decision.compareDocumentPosition(recap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Projet d'attestation" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /projet/i })).not.toBeInTheDocument();
+  });
+
+  it.each(["EN_COURS", "BROUILLON"] as const)("%s : aucun bloc de décision définitive", async (statut) => {
+    mockDemande(demandeApi({ statut, decision: null }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    await screen.findByText("Tour Horizon");
+    expect(screen.queryByRole("heading", { name: "Décision du siège" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Attestation définitive" })).not.toBeInTheDocument();
+  });
+});
+
+describe("DemandeConsultationPage — compléments et disposition des documents", () => {
+  const complement = {
+    id: "complement-1",
+    message: "Précisez la nature des travaux.\nJoignez le devis signé.",
+    requested_at: "2026-09-19T10:00:00Z",
+    received_at: null,
+  };
+  const titresH2 = () => screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+
+  it("EN_COURS avec complément : le complément suit le suivi, avant le récapitulatif", async () => {
+    mockDemande(demandeApi({ complement_actif: complement }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    const titre = await screen.findByRole("heading", { name: "Compléments demandés par le siège" });
+    const ordre = ["Suivi de la demande", "Compléments demandés par le siège", "Récapitulatif des informations"];
+    expect(titresH2().filter((t) => ordre.includes(t ?? ""))).toEqual(ordre);
+    const section = titre.closest(".surface") as HTMLElement;
+    expect(within(section).getByText("Demandés le")).toBeInTheDocument();
+    expect(within(section).getByText("Demande du siège")).toBeInTheDocument();
+    const message = within(section).getByText(/Précisez la nature des travaux\./);
+    expect(message.textContent).toBe(complement.message);
+    expect(message).toHaveClass("consultation-multiligne");
+  });
+
+  it("TRAITE accepté avec complément : décision, attestation, puis complément, avant le récapitulatif", async () => {
+    mockDemande(demandeApi({
+      statut: "TRAITE",
+      decision: "ACCEPTEE",
+      attestation_finale: { validated_at: "2026-09-19T10:00:00Z" },
+      complement_actif: complement,
+    }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Compléments demandés par le siège" });
+    const ordre = [
+      "Suivi de la demande", "Décision du siège", "Attestation définitive",
+      "Compléments demandés par le siège", "Récapitulatif des informations",
+    ];
+    expect(titresH2().filter((t) => ordre.includes(t ?? ""))).toEqual(ordre);
+  });
+
+  it("refusé : pas de projet ni d'attestation, complément éventuel après la décision", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", motif_refus: "Refus.", complement_actif: complement }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Compléments demandés par le siège" });
+    const titres = titresH2();
+    expect(titres.indexOf("Décision du siège")).toBeLessThan(titres.indexOf("Compléments demandés par le siège"));
+    expect(titres).not.toContain("Attestation définitive");
+    expect(titres).not.toContain("Projet d'attestation");
+  });
+
+  it("les blocs de documents partagent la disposition informations | actions", async () => {
+    mockDemande(demandeApi({
+      statut: "TRAITE",
+      decision: "ACCEPTEE",
+      attestation_finale: { validated_at: "2026-09-19T10:00:00Z" },
+    }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    for (const nom of ["Attestation définitive", "Document transmis"]) {
+      const section = (await screen.findByRole("heading", { name: nom })).closest(".surface") as HTMLElement;
+      const disposition = section.querySelector(".consultation-document") as HTMLElement;
+      expect(disposition.querySelector(".consultation-document__infos")).toBeInTheDocument();
+      const actions = disposition.querySelector(".consultation-document__actions") as HTMLElement;
+      expect(within(actions).getByRole("button", { name: "Prévisualiser" })).toBeInTheDocument();
+      expect(within(actions).getByRole("button", { name: "Télécharger" })).toBeInTheDocument();
+    }
+    expect(screen.getByText("Formulaire de déclaration du risque")).toBeInTheDocument();
+  });
+});
+
+describe("DemandeConsultationPage — actions des blocs Suivi et Projet", () => {
+  const actionsDe = async (titre: string) => {
+    const section = (await screen.findByRole("heading", { name: titre })).closest(".surface") as HTMLElement;
+    return section.querySelector(".consultation-document__actions") as HTMLElement;
+  };
+
+  it("Suivi : Relancer le siège est dans la colonne d'actions", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    renderPage();
+
+    expect(within(await actionsDe("Suivi de la demande")).getByRole("button", { name: "Relancer le siège" })).toBeEnabled();
+  });
+
+  it("Projet : Créer / Modifier le projet sont dans la colonne d'actions", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    mockProjetAttestation(null);
+    const { unmount } = renderPage();
+    expect(within(await actionsDe("Projet d'attestation")).getByRole("button", { name: "Créer le projet" })).toBeInTheDocument();
+    unmount();
+
+    mockProjetAttestation({ contenu_html: "<p>x</p>", created_at: "2026-09-13T08:00:00Z", updated_at: "2026-09-14T08:00:00Z" });
+    renderPage();
+    expect(within(await actionsDe("Projet d'attestation")).getByRole("button", { name: "Modifier le projet" })).toBeInTheDocument();
+  });
+
+  it("TRAITE : pas de bouton Relancer dans le suivi", async () => {
+    mockDemande(demandeApi({ statut: "TRAITE", decision: "REFUSEE", motif_refus: "Refus." }));
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Suivi de la demande" });
+    expect(screen.queryByRole("button", { name: "Relancer le siège" })).not.toBeInTheDocument();
   });
 });

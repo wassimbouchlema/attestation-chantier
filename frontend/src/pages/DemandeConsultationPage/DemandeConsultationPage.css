@@ -1,0 +1,19 @@
+.consultation-multiligne {
+  white-space: pre-wrap;
+}
+
+.consultation-document {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  justify-content: space-between;
+}
+
+.consultation-document__infos {
+  flex: 1 1 20rem;
+}
+
+.consultation-document__actions {
+  flex: 0 0 auto;
+}

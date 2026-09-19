@@ -25,24 +25,30 @@ export const DemandesTable = ({
   attestationEnCours: boolean;
 }) => {
   return (
-    <>
+    <div className="demandes-table">
       <Table>
         <THead>
           <Tr>
-            <Th scope="col">Statut</Th>
-            <Th scope="col">Décision</Th>
-            <Th scope="col">Date de création</Th>
+            <Th scope="col" className="demandes-table__col-identite">Assuré</Th>
+            <Th scope="col" className="demandes-table__col-identite">Chantier</Th>
+            <Th scope="col" className="demandes-table__col-statut">Statut</Th>
+            <Th scope="col" className="demandes-table__col-decision">Décision</Th>
+            <Th scope="col" className="demandes-table__col-date">Date de création</Th>
             <Th scope="col" className="demandes-table__col-actions">Actions</Th>
           </Tr>
         </THead>
         <TBody>
           {demandes.map((demande) => (
             <Tr key={demande.id}>
-              <Td>
+              <Td>{demande.assure_nom || "—"}</Td>
+              <Td>{demande.chantier_nom || "—"}</Td>
+              <Td className="demandes-table__cell-centre">
                 <Tag variant={VARIANT_STATUT[demande.statut]}>{LIBELLE_STATUT[demande.statut]}</Tag>
               </Td>
-              <Td>{demande.decision ? LIBELLE_DECISION[demande.decision] : "—"}</Td>
-              <Td>{formatDate(demande.created_at)}</Td>
+              <Td className="demandes-table__cell-centre">
+                {demande.decision ? LIBELLE_DECISION[demande.decision] : "—"}
+              </Td>
+              <Td className="demandes-table__cell-centre">{formatDate(demande.created_at)}</Td>
               <Td>
                 {demande.statut === "BROUILLON" ? (
                   <div className="demandes-table__actions">
@@ -98,6 +104,6 @@ export const DemandesTable = ({
           elementsLabel="demandes"
         />
       )}
-    </>
+    </div>
   );
 };

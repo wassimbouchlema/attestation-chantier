@@ -1,0 +1,8 @@
+.page-header__accueil {
+  margin-right: 1rem;
+}
+
+.page-header__accueil.af-btn--circle:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 2px;
+}
