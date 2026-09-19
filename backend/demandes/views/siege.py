@@ -1,7 +1,7 @@
 import mimetypes
 
 from django.db import transaction
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -10,7 +10,9 @@ from rest_framework.response import Response
 from comptes.permissions import IsSiege
 
 from ..evaluation_risque import calculer_evaluation_risque
+from ..html_sanitization import nettoyer_html
 from ..models import (
+    Attestation,
     DecisionDemande,
     Demande,
     DemandeComplement,
@@ -19,25 +21,27 @@ from ..models import (
     StatutDemande,
     TypeNotification,
 )
+from ..projet_attestation import generer_contenu_initial
+from ..projet_attestation_pdf import generer_pdf
 from ..rules import calculer_pieces_manquantes, calculer_pieces_requises
 from ..serializers import (
-    DemandeDetailSerializer,
     DemanderComplementsSerializer,
     EvaluationRisqueSerializer,
     PieceJustificativeSerializer,
     RefuserDemandeSerializer,
 )
+from ..serializers.attestation import AttestationSerializer, SiegeDemandeDetailSerializer
 from .distributeur import DemandePagination
 
 
 class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsSiege]
-    serializer_class = DemandeDetailSerializer
+    serializer_class = SiegeDemandeDetailSerializer
     lookup_value_converter = "uuid"
     pagination_class = DemandePagination
 
     def get_queryset(self):
-        return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr")
+        return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr", "attestation")
 
     def _conflit_traitement(self, demande, *, verifier_complement_actif=False):
         if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
@@ -54,6 +58,52 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
                 status=status.HTTP_409_CONFLICT,
             )
         return None
+
+    @action(detail=True, methods=["post"], url_path="attestation/preparer")
+    def preparer_attestation(self, request, pk=None):
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            attestation, creee = Attestation.objects.get_or_create(
+                demande=demande,
+                defaults={"contenu_html": lambda: nettoyer_html(generer_contenu_initial(demande.fdr, preparation=True))},
+            )
+            return Response(
+                AttestationSerializer(attestation).data,
+                status=status.HTTP_201_CREATED if creee else status.HTTP_200_OK,
+            )
+
+    @action(detail=True, methods=["get", "patch"], url_path="attestation")
+    def attestation(self, request, pk=None):
+        with transaction.atomic():
+            demande = get_object_or_404(Demande.objects.select_for_update(), pk=pk)
+            conflit = self._conflit_traitement(demande)
+            if conflit is not None:
+                return conflit
+            attestation = get_object_or_404(Attestation, demande=demande)
+            if request.method == "PATCH":
+                serializer = AttestationSerializer(attestation, data=request.data, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+            else:
+                serializer = AttestationSerializer(attestation)
+            return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="attestation/pdf")
+    def attestation_pdf(self, request, pk=None):
+        demande = get_object_or_404(Demande.objects.select_related("fdr", "distributeur"), pk=pk)
+        conflit = self._conflit_traitement(demande)
+        if conflit is not None:
+            return conflit
+        attestation = get_object_or_404(Attestation, demande=demande)
+        response = HttpResponse(
+            generer_pdf(demande, nettoyer_html(attestation.contenu_html), preparation=True),
+            content_type="application/pdf",
+        )
+        response["Content-Disposition"] = f'inline; filename="preparation-attestation-{demande.id}.pdf"'
+        return response
 
     @action(detail=True, methods=["post"], url_path="demander-complements")
     def demander_complements(self, request, pk=None):

@@ -229,6 +229,16 @@ class Notification(models.Model):
         ]
 
 
+class Attestation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    demande = models.OneToOneField(Demande, on_delete=models.CASCADE, related_name="attestation")
+    contenu_html = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    pdf_final = models.FileField(upload_to="attestations/", null=True, blank=True)
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+
 class ProjetAttestation(models.Model):
     """Document éditable (WYSIWYG) préparé par le distributeur pour une demande
     EN_COURS — jamais l'attestation définitive, qui reste du ressort du SIÈGE

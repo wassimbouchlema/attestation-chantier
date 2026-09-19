@@ -22,7 +22,7 @@ from django.utils.html import escape
 from .models import FormulaireRisque, TypeChantier, TypeIntervention
 
 
-def generer_contenu_initial(fdr: FormulaireRisque) -> str:
+def generer_contenu_initial(fdr: FormulaireRisque, *, preparation: bool = False) -> str:
     type_chantier_libelle = TypeChantier(fdr.type_chantier).label
     type_intervention_libelle = TypeIntervention(fdr.intervention_type).label
     date_debut = fdr.date_debut.strftime("%d/%m/%Y") if fdr.date_debut else ""
@@ -48,6 +48,6 @@ def generer_contenu_initial(fdr: FormulaireRisque) -> str:
         f"<p>Type d'intervention : {escape(type_intervention_libelle)}</p>"
         f"<p>Montant total du chantier : {escape(montant_total)}</p>"
         f"<p>Montant de la prestation : {escape(montant_prestation)}</p>"
-        "<blockquote>Projet établi à partir des informations déclarées dans "
+        f"<blockquote>{'Document préparé' if preparation else 'Projet établi'} à partir des informations déclarées dans "
         "le formulaire de risque.</blockquote>"
     )

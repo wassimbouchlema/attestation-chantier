@@ -14,6 +14,7 @@ import { FdrNouvelleDemandePage } from "../pages/FdrNouvelleDemandePage/FdrNouve
 import { FdrPiecesPage } from "../pages/FdrPieces/FdrPiecesPage";
 import { FdrValidationPage } from "../pages/FdrValidationPage/FdrValidationPage";
 import { ProjetAttestationPage } from "../pages/ProjetAttestationPage/ProjetAttestationPage";
+import { AttestationPage } from "../pages/AttestationPage/AttestationPage";
 import { SiegeDemandeConsultationPage } from "../pages/SiegeDemandeConsultationPage/SiegeDemandeConsultationPage";
 import { SiegeHome } from "../pages/SiegeHome/SiegeHome";
 import { ProtectedRoute } from "./ProtectedRoute";
@@ -112,6 +113,14 @@ export const AppRouter = () => {
           element={
             <ProtectedRoute roleRequis="SIEGE">
               <SiegeDemandeConsultationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/siege/demandes/:id/attestation"
+          element={
+            <ProtectedRoute roleRequis="SIEGE">
+              <AttestationPage />
             </ProtectedRoute>
           }
         />

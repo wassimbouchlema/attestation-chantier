@@ -1,0 +1,53 @@
+import { ErreurReseauOuServeur, lireJson } from "./http";
+import { requeteAuthentifiee } from "./httpAuthentifie";
+
+export interface AttestationApi {
+  id: string;
+  demande: string;
+  contenu_html: string;
+  created_at: string;
+  updated_at: string;
+  pdf_final: string | null;
+  validated_at: string | null;
+}
+
+const urlAttestation = (id: string) => `/siege/demandes/${id}/attestation/`;
+
+const verifierReponse = async (response: Response, message: string) => {
+  if (!response.ok) {
+    const corps = await lireJson<{ detail?: string; contenu_html?: string[] }>(response, message);
+    throw new ErreurReseauOuServeur(corps.detail ?? corps.contenu_html?.[0] ?? message);
+  }
+};
+
+export const recupererAttestation = async (id: string, signal?: AbortSignal): Promise<AttestationApi | null> => {
+  const response = await requeteAuthentifiee(urlAttestation(id), { signal });
+  if (response.status === 404) return null;
+  const message = "Impossible de récupérer l'attestation.";
+  await verifierReponse(response, message);
+  return lireJson<AttestationApi>(response, message);
+};
+
+export const preparerAttestation = async (id: string): Promise<AttestationApi> => {
+  const response = await requeteAuthentifiee(`${urlAttestation(id)}preparer/`, { method: "POST" });
+  const message = "Impossible de préparer l'attestation.";
+  await verifierReponse(response, message);
+  return lireJson<AttestationApi>(response, message);
+};
+
+export const sauvegarderAttestation = async (id: string, contenuHtml: string): Promise<AttestationApi> => {
+  const response = await requeteAuthentifiee(urlAttestation(id), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contenu_html: contenuHtml }),
+  });
+  const message = "Impossible d'enregistrer l'attestation.";
+  await verifierReponse(response, message);
+  return lireJson<AttestationApi>(response, message);
+};
+
+export const recupererAttestationPdf = async (id: string): Promise<Blob> => {
+  const response = await requeteAuthentifiee(`${urlAttestation(id)}pdf/`);
+  await verifierReponse(response, "Impossible de générer la prévisualisation.");
+  return response.blob();
+};

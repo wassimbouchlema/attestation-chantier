@@ -6,27 +6,23 @@ import type { DemandeDetail } from "../../../../api/demandes";
 import { DocumentGabarit } from "../DocumentGabarit/DocumentGabarit";
 import { useQuillEditor } from "../QuillEditor/useQuillEditor";
 
-/**
- * Compose le document : barre d'outils **au-dessus** de la feuille (outil
- * applicatif, absent de l'attestation), puis une feuille A4 unique où le
- * gabarit fixe (en-tête, titres, pied de page) encadre la seule zone
- * éditable. Les titres « PROJET D'ATTESTATION / NON DÉFINITIF » et
- * « ATTESTATION D'ASSURANCE », comme le pied de page de validation, sont
- * rendus ici et non dans `contenu_html` : ils ne sont donc ni supprimables
- * depuis Quill, ni dupliqués par le contenu enregistré.
- */
+// Le gabarit reste hors du HTML éditable pour éviter sa modification ou sa duplication.
 export const EditeurProjetAttestation = ({
   demande,
   agent,
   valeurInitiale,
   onChange,
+  preparation = false,
+  disabled = false,
 }: {
   demande: DemandeDetail;
-  agent: Utilisateur;
+  agent?: Utilisateur;
   valeurInitiale: string;
   onChange: (html: string) => void;
+  preparation?: boolean;
+  disabled?: boolean;
 }) => {
-  const { conteneurRef, barreOutilsRef } = useQuillEditor(valeurInitiale, onChange);
+  const { conteneurRef, barreOutilsRef } = useQuillEditor(valeurInitiale, onChange, disabled);
 
   return (
     <div className="projet-attestation-editeur">
@@ -54,14 +50,18 @@ export const EditeurProjetAttestation = ({
         <DocumentGabarit demande={demande} agent={agent} />
 
         <div className="projet-attestation-titres">
-          <p className="projet-attestation-titres__projet">Projet d'attestation</p>
-          <p className="projet-attestation-titres__mention">Non définitif</p>
+          {!preparation && (
+            <>
+              <p className="projet-attestation-titres__projet">Projet d'attestation</p>
+              <p className="projet-attestation-titres__mention">Non définitif</p>
+            </>
+          )}
           <h2 className="projet-attestation-titres__objet">Attestation d'assurance</h2>
         </div>
 
         <div className="projet-attestation-corps" ref={conteneurRef} />
 
-        <p className="projet-attestation-pied">Validation définitive : réservée au siège.</p>
+        {!preparation && <p className="projet-attestation-pied">Validation définitive : réservée au siège.</p>}
       </article>
     </div>
   );

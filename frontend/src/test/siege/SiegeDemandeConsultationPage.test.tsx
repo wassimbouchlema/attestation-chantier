@@ -126,7 +126,7 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.getByText("Dossier urgent, merci.")).toBeInTheDocument();
   });
 
-  it("propose seulement les deux actions SIÈGE prévues", async () => {
+  it("propose les actions SIÈGE sans validation finale", async () => {
     mockDemande(demandeApi());
     mockPieces(PIECES_COMPLETES);
     mockEvaluationRisque(EVALUATION);
@@ -138,7 +138,8 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.queryByRole("button", { name: /Modifier le projet/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Demander des compléments" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Accepter|Préparer l'attestation/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Accepter/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Préparer l'attestation" })).toBeInTheDocument();
   });
 
   it("ne consulte ni n'affiche le projet du distributeur", async () => {

@@ -1,18 +1,4 @@
-"""Rendu PDF du projet d'attestation : HTML complet (gabarit fixe + corps
-éditable sanitizé) -> xhtml2pdf.
-
-Moteur distinct de celui du FDR, assumé : le FDR est un document structuré
-composé directement en ReportLab et figé à l'envoi, alors que le projet
-d'attestation part d'un HTML WYSIWYG qu'il faut mettre en page. xhtml2pdf
-suffit ici car le HTML éditable est volontairement limité (titres,
-paragraphes, gras/italique/souligné, listes) : aucun moteur CSS de navigateur
-n'est nécessaire.
-
-Le PDF n'est jamais stocké : il est rendu à la demande à partir de
-`contenu_html`, seule source de vérité. Le corps repris ici est celui
-enregistré en base, donc déjà passé par `nettoyer_html()` — jamais l'état
-temporaire de l'éditeur côté navigateur.
-"""
+"""PDF à la demande : gabarit fixe et corps HTML enregistré, préalablement sanitizé."""
 
 import io
 from datetime import date
@@ -38,6 +24,7 @@ body { font-family: Helvetica; font-size: 10pt; color: #333333; }
 .objet { border-bottom: 0.5pt solid #cccccc; padding-bottom: 10pt; margin-bottom: 16pt; }
 .titre-projet { font-size: 15pt; font-weight: bold; text-align: center; }
 .mention { font-size: 10pt; font-weight: bold; text-align: center; color: #bd4d2e; }
+.previsualisation { font-size: 8pt; text-align: center; color: #666666; margin-bottom: 12pt; }
 .titre-objet { font-size: 11pt; font-weight: bold; text-align: center; margin-top: 14pt; }
 .corps { margin-top: 16pt; }
 .pied { border-top: 0.5pt solid #cccccc; padding-top: 8pt; margin-top: 20pt;
@@ -53,8 +40,14 @@ def _nom_agent(demande: Demande) -> str:
     return nom_complet or agent.username
 
 
-def construire_html(demande: Demande, contenu_html: str) -> str:
+def construire_html(demande: Demande, contenu_html: str, *, preparation: bool = False) -> str:
     fdr = demande.fdr
+    marquage = (
+        '<p class="previsualisation">DOCUMENT DE PRÉVISUALISATION — NON VALIDÉ</p>'
+        if preparation
+        else '<p class="titre-projet">PROJET D\'ATTESTATION</p><p class="mention">NON DÉFINITIF</p>'
+    )
+    pied = "" if preparation else '<p class="pied">Validation définitive : réservée au siège.</p>'
     return f"""<html>
 <head><meta charset="utf-8" /><style>{FEUILLE_STYLE}</style></head>
 <body>
@@ -89,21 +82,22 @@ def construire_html(demande: Demande, contenu_html: str) -> str:
     <p>Attestation d'assurance — Chantier {escape(fdr.chantier_nom)}</p>
   </div>
 
-  <p class="titre-projet">PROJET D'ATTESTATION</p>
-  <p class="mention">NON DÉFINITIF</p>
+  {marquage}
   <p class="titre-objet">ATTESTATION D'ASSURANCE</p>
 
   <div class="corps">{contenu_html}</div>
 
-  <p class="pied">Validation définitive : réservée au siège.</p>
+  {pied}
 </body></html>"""
 
 
-def generer_pdf(demande: Demande, contenu_html: str) -> bytes:
+def generer_pdf(demande: Demande, contenu_html: str, *, preparation: bool = False) -> bytes:
     from xhtml2pdf import pisa
 
     sortie = io.BytesIO()
-    resultat = pisa.CreatePDF(src=construire_html(demande, contenu_html), dest=sortie, encoding="utf-8")
+    resultat = pisa.CreatePDF(
+        src=construire_html(demande, contenu_html, preparation=preparation), dest=sortie, encoding="utf-8"
+    )
     if resultat.err:
         raise RuntimeError("Échec de la génération du PDF du projet d'attestation.")
     return sortie.getvalue()

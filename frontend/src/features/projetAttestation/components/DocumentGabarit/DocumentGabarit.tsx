@@ -10,17 +10,7 @@ const nomAgent = (agent: Utilisateur): string => {
   return nomComplet || agent.username;
 };
 
-/**
- * En-tête fixe du document, inspiré de la composition d'un courrier AXA
- * (agent à gauche, logo à droite, contrat/références, destinataire, objet).
- *
- * Seules des données réelles y figurent : agent connecté, FDR de la demande,
- * date du jour. Les informations qu'une attestation AXA réelle porte mais que
- * l'application ne détient pas (adresse et téléphone de l'agence, ORIAS,
- * SIREN, numéro client) sont volontairement absentes plutôt qu'inventées :
- * un bloc plus léger mais honnête.
- */
-export const DocumentGabarit = ({ demande, agent }: { demande: DemandeDetail; agent: Utilisateur }) => {
+export const DocumentGabarit = ({ demande, agent }: { demande: DemandeDetail; agent?: Utilisateur }) => {
   const { fdr } = demande;
 
   return (
@@ -28,7 +18,7 @@ export const DocumentGabarit = ({ demande, agent }: { demande: DemandeDetail; ag
       <div className="projet-attestation-gabarit__entete">
         <div>
           <p className="projet-attestation-gabarit__label">Votre agent général</p>
-          <p>{nomAgent(agent)}</p>
+          <p>{agent ? nomAgent(agent) : demande.distributeur_nom}</p>
         </div>
         <img src={logoAxa} alt="AXA" className="projet-attestation-gabarit__logo" />
       </div>

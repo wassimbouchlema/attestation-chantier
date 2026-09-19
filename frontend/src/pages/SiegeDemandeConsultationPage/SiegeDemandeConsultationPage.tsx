@@ -29,6 +29,9 @@ export const SiegeDemandeConsultationPage = () => {
     fermerErreurPdf,
     retournerAuxDemandes,
     traitable,
+    ouvrirAttestation,
+    preparationEnCours,
+    erreurPreparation,
     peutDemanderComplements,
     actionTraitement,
     ouvrirTraitement,
@@ -134,6 +137,9 @@ export const SiegeDemandeConsultationPage = () => {
                 )}
                 {traitable && (
                   <div className="fdr-actions-globales">
+                    <Button variant="primary" onClick={ouvrirAttestation} disabled={preparationEnCours}>
+                      {demande.attestation_existe ? "Reprendre l'attestation" : "Préparer l'attestation"}
+                    </Button>
                     {peutDemanderComplements && (
                       <Button variant="secondary" onClick={() => ouvrirTraitement("demander-complements")}>
                         Demander des compléments
@@ -144,6 +150,7 @@ export const SiegeDemandeConsultationPage = () => {
                     </Button>
                   </div>
                 )}
+                {erreurPreparation && <Message variant="error" title={erreurPreparation} />}
               </Surface>
 
               <div className="fdr-actions-globales">

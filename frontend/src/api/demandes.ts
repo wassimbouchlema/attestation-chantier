@@ -66,6 +66,7 @@ export interface FormulaireRisqueApi {
  * `distributeur_nom` reste optionnel côté type malgré son envoi systématique : seul le SIÈGE l'affiche.
  */
 export interface DemandeDetail extends Demande {
+  attestation_existe?: boolean;
   commentaire_distributeur: string;
   fdr: FormulaireRisqueApi;
   distributeur_nom?: string;

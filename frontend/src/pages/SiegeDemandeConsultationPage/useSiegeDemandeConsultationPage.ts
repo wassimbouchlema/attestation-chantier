@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ErreurDemandeIntrouvable } from "../../api/demandes";
 import type { TraitementSiege } from "../../api/siege";
+import { usePreparerAttestation } from "../../features/attestation/queries";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { useDemandeSiege, useTelechargerFdrPdfSiege, useTraiterDemandeSiege } from "../../features/siege/queries";
@@ -18,6 +19,7 @@ export const useSiegeDemandeConsultationPage = () => {
   const demandeQuery = useDemandeSiege(demandeId);
   const telechargerPdfMutation = useTelechargerFdrPdfSiege(demandeId);
   const traitementMutation = useTraiterDemandeSiege(demandeId);
+  const preparationMutation = usePreparerAttestation(demandeId);
   const [actionTraitement, setActionTraitement] = useState<TraitementSiege["action"] | null>(null);
   const [texteTraitement, setTexteTraitement] = useState("");
   const [erreurSaisie, setErreurSaisie] = useState<string | null>(null);
@@ -84,6 +86,17 @@ export const useSiegeDemandeConsultationPage = () => {
     reessayerChargement: () => demandeQuery.refetch(),
     demande,
     traitable,
+    ouvrirAttestation: () => {
+      if (demande?.attestation_existe) {
+        navigate(`/siege/demandes/${demandeId}/attestation`);
+      } else {
+        preparationMutation.mutate(undefined, {
+          onSuccess: () => navigate(`/siege/demandes/${demandeId}/attestation`),
+        });
+      }
+    },
+    preparationEnCours: preparationMutation.isPending,
+    erreurPreparation: preparationMutation.isError ? messageErreurAffichable(preparationMutation.error) : null,
     peutDemanderComplements: traitable && !demande?.complement_actif,
     actionTraitement,
     ouvrirTraitement,
