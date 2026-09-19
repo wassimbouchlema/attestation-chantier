@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { preparerAttestation, recupererAttestation, recupererAttestationPdf, sauvegarderAttestation } from "../../api/attestation";
+import { analyserCoherenceAttestation, preparerAttestation, recupererAttestation, recupererAttestationPdf, sauvegarderAttestation } from "../../api/attestation";
 import { siegeDemandesKeys } from "../siege/queries";
 
 const attestationKey = (id: string) => ["attestation-siege", id] as const;
@@ -31,4 +31,9 @@ export const useSauvegarderAttestation = (id: string) => {
 
 export const useAttestationPdf = (id: string) => useMutation({
   mutationFn: () => recupererAttestationPdf(id),
+});
+
+export const useAnalyserCoherence = (id: string) => useMutation({
+  mutationFn: () => analyserCoherenceAttestation(id),
+  retry: false,
 });

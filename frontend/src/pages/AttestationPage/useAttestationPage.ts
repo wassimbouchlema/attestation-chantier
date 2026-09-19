@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useAttestation, useAttestationPdf, useSauvegarderAttestation } from "../../features/attestation/queries";
+import type { ResultatCoherenceApi } from "../../api/attestation";
+import { useAnalyserCoherence, useAttestation, useAttestationPdf, useSauvegarderAttestation } from "../../features/attestation/queries";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { useDemandeSiege } from "../../features/siege/queries";
@@ -19,6 +20,36 @@ export const useAttestationPage = () => {
   const contenuRef = useRef<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [succes, setSucces] = useState(false);
+  const analyse = useAnalyserCoherence(demandeId);
+  const revision = useRef(0);
+  const [controle, setControle] = useState<{
+    resultat: ResultatCoherenceApi;
+    contenu: string;
+    updatedAt: string;
+    demandeId: string;
+  } | null>(null);
+  const [erreurAnalyse, setErreurAnalyse] = useState<string | null>(null);
+  const analyseDisabled = dirty || sauvegarde.isPending || analyse.isPending
+    || !attestationQuery.data || attestationQuery.data.validated_at !== null
+    || demandeQuery.data?.statut !== "EN_COURS" || demandeQuery.data?.decision !== null;
+
+  const analyser = () => {
+    const document = attestationQuery.data;
+    if (analyseDisabled || !document) return;
+    const revisionAnalysee = revision.current;
+    setControle(null);
+    setErreurAnalyse(null);
+    analyse.mutate(undefined, {
+      onSuccess: (resultat) => {
+        if (revision.current === revisionAnalysee) {
+          setControle({ resultat, contenu: document.contenu_html, updatedAt: document.updated_at, demandeId });
+        }
+      },
+      onError: (error) => {
+        if (revision.current === revisionAnalysee) setErreurAnalyse(messageErreurAffichable(error));
+      },
+    });
+  };
 
   const enregistrer = () => {
     if (sauvegarde.isPending) return;
@@ -43,11 +74,21 @@ export const useAttestationPage = () => {
       void attestationQuery.refetch();
     },
     modifierContenu: (html: string) => {
+      revision.current += 1;
+      setControle(null);
+      setErreurAnalyse(null);
       contenuRef.current = html;
       setDirty(true);
       setSucces(false);
     },
     dirty,
+    analyser,
+    analyseDisabled,
+    analyseEnCours: analyse.isPending,
+    erreurAnalyse,
+    resultatAnalyse: !dirty && controle?.demandeId === demandeId
+      && controle.contenu === attestationQuery.data?.contenu_html
+      && controle.updatedAt === attestationQuery.data?.updated_at ? controle.resultat : null,
     enregistrer,
     enregistrementEnCours: sauvegarde.isPending,
     erreurEnregistrement: sauvegarde.isError ? messageErreurAffichable(sauvegarde.error) : null,

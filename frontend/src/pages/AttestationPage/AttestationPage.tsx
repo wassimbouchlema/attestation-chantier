@@ -1,6 +1,7 @@
 import { Button, Loader, MainContainer, Message, Tag } from "@axa-fr/canopee-react/distributeur";
 
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
+import { ResultatCoherence } from "../../features/attestation/components/ResultatCoherence";
 import { PageHeader } from "../../layout/PageHeader";
 import { useAttestationPage } from "./useAttestationPage";
 
@@ -45,6 +46,17 @@ export const AttestationPage = () => {
                   Télécharger la prévisualisation
                 </Button>
               </div>
+              <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
+                <h2 id="titre-coherence">Contrôle de cohérence</h2>
+                {page.dirty && <p>Enregistrez vos modifications avant de lancer le contrôle.</p>}
+                <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
+                  {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
+                </Button>
+                <div aria-live="polite">
+                  {page.erreurAnalyse && <Message variant="error" title={page.erreurAnalyse} />}
+                  {page.resultatAnalyse && <ResultatCoherence resultat={page.resultatAnalyse} />}
+                </div>
+              </section>
             </>
           )}
           <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>

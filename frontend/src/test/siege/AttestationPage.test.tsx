@@ -1,11 +1,11 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
-import type { AttestationApi } from "../../api/attestation";
+import type { AttestationApi, ResultatCoherenceApi } from "../../api/attestation";
 import type { DemandeDetail } from "../../api/demandes";
 import { AuthProvider } from "../../features/auth/AuthProvider";
 import { AttestationPage } from "../../pages/AttestationPage/AttestationPage";
@@ -54,6 +54,7 @@ const attendreEditeur = async () => {
 
 let sauvegarder: Mock<(args: { request: Request }) => Promise<Response>>;
 let genererPdf: Mock<() => Response>;
+let analyser: Mock<() => Response>;
 let ouverture: ReturnType<typeof vi.spyOn>;
 let fichier: string | undefined;
 let contenuEnvoye: string | undefined;
@@ -71,11 +72,16 @@ beforeEach(() => {
   genererPdf = vi.fn(() => new HttpResponse("%PDF-1.4 prévisualisation", {
     headers: { "Content-Type": "application/pdf" },
   }));
+  analyser = vi.fn(() => HttpResponse.json({
+    backend: "simulation", coherent: true,
+    resume: "Aucune incohérence détectée entre le FDR et l'attestation enregistrée.", anomalies: [],
+  } satisfies ResultatCoherenceApi));
   server.use(
     http.get("*/siege/demandes/:id/", () => HttpResponse.json(demande)),
     http.get("*/siege/demandes/:id/attestation/", () => HttpResponse.json(attestation)),
     http.patch("*/siege/demandes/:id/attestation/", sauvegarder),
     http.get("*/siege/demandes/:id/attestation/pdf/", genererPdf),
+    http.post("*/siege/demandes/:id/attestation/analyser-coherence/", analyser),
   );
   URL.createObjectURL = vi.fn(() => "blob:attestation");
   URL.revokeObjectURL = vi.fn();
@@ -106,7 +112,8 @@ describe("Éditeur SIÈGE", () => {
     expect(within(feuille).queryByText("Non validée")).not.toBeInTheDocument();
     expect(within(feuille).queryByText("Validation définitive : réservée au siège.")).not.toBeInTheDocument();
     expect(within(feuille).queryByText("Alice Martin")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Valider|Accepter|Contrôler/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Valider|Accepter|Refuser/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled();
     expect(screen.queryByText(/Enregistrez vos modifications/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeEnabled();
     expect(genererPdf).not.toHaveBeenCalled();
@@ -121,6 +128,10 @@ describe("Éditeur SIÈGE", () => {
     expect(screen.getByText("Enregistrez vos modifications avant de générer la prévisualisation.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Télécharger la prévisualisation" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
+    expect(screen.getByText("Enregistrez vos modifications avant de lancer le contrôle.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(analyser).not.toHaveBeenCalled();
     expect(sauvegarder).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Prévisualiser" }));
     expect(genererPdf).not.toHaveBeenCalled();
@@ -132,6 +143,7 @@ describe("Éditeur SIÈGE", () => {
     expect(screen.queryByText(/Enregistrez vos modifications/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Télécharger la prévisualisation" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Prévisualiser" }));
     await waitFor(() => expect(ouverture).toHaveBeenCalledWith("blob:attestation", "_blank"));
     await user.click(screen.getByRole("button", { name: "Télécharger la prévisualisation" }));
@@ -148,6 +160,7 @@ describe("Éditeur SIÈGE", () => {
     await screen.findByText("Impossible d'enregistrer l'attestation.");
     expect(await attendreEditeur()).toHaveTextContent("À conserver.");
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
   });
 
   it("revient au détail de la demande", async () => {
@@ -163,6 +176,106 @@ describe("Éditeur SIÈGE", () => {
     renderPage();
     expect(await screen.findByText("Cette attestation est introuvable.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retour à la demande" })).toBeEnabled();
+  });
+});
+
+describe("Contrôle de cohérence SIÈGE", () => {
+  it("affiche le chargement puis le résultat cohérent sans action de décision", async () => {
+    server.use(http.post("*/siege/demandes/:id/attestation/analyser-coherence/", async ({ request }) => {
+      expect(await request.text()).toBe("");
+      await delay(150);
+      return analyser();
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(screen.getByRole("button", { name: "Analyse en cours…" })).toBeDisabled();
+    expect(await screen.findByText("Cohérent")).toBeInTheDocument();
+    expect(screen.getByText("Aucune incohérence détectée entre le FDR et l'attestation enregistrée.")).toBeInTheDocument();
+    expect(screen.getByText("Analyse simulée")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Valider|Accepter|Refuser/ })).not.toBeInTheDocument();
+    expect(sauvegarder).not.toHaveBeenCalled();
+    expect(analyser).toHaveBeenCalledTimes(1);
+  });
+
+  it("restitue les anomalies et indique explicitement une simulation", async () => {
+    analyser.mockImplementation(() => HttpResponse.json({
+      backend: "simulation", coherent: false, resume: "Deux écarts factuels détectés.",
+      anomalies: [
+        { type: "VALEUR_DIFFERENTE", champ: "montant_total", valeur_fdr: "12000000.00",
+          valeur_attestation: "1200000.00", message: "Le montant total diffère." },
+        { type: "INFORMATION_ABSENTE", champ: "date_fin", valeur_fdr: "2027-06-30",
+          valeur_attestation: "", message: "La date de fin est absente." },
+      ],
+    } satisfies ResultatCoherenceApi));
+    const user = userEvent.setup();
+    renderPage();
+    await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(await screen.findByText("Incohérences détectées")).toBeInTheDocument();
+    const resultat = screen.getByRole("region", { name: "Résultat du contrôle de cohérence" });
+    for (const texte of ["Analyse simulée", "Montant total du chantier", "12000000.00", "1200000.00",
+      "Le montant total diffère.", "Date de fin", "2027-06-30", "Information absente", "La date de fin est absente."]) {
+      expect(within(resultat).getByText(texte)).toBeInTheDocument();
+    }
+    expect(within(resultat).getAllByText("Valeur FDR")).toHaveLength(2);
+    expect(within(resultat).getAllByText("Valeur attestation")).toHaveLength(2);
+  });
+
+  it("affiche l'erreur IA sans ancien résultat puis autorise une nouvelle tentative", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await screen.findByText("Cohérent");
+    analyser.mockImplementationOnce(() => HttpResponse.json({
+      code: "IA_INDISPONIBLE", detail: "Le contrôle de cohérence est indisponible. Réessayez plus tard.",
+    }, { status: 503 }));
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(await screen.findByText("Le contrôle de cohérence est indisponible. Réessayez plus tard.")).toBeInTheDocument();
+    expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Analyse simulée")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(await screen.findByText("Cohérent")).toBeInTheDocument();
+    expect(analyser).toHaveBeenCalledTimes(3);
+  });
+
+  it("supprime le résultat dès modification puis analyse la version enregistrée", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const editeur = await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await screen.findByText("Cohérent");
+    await user.type(editeur, "Correction.");
+    expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await screen.findByText("Attestation enregistrée.");
+    expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    expect(await screen.findByText("Cohérent")).toBeInTheDocument();
+    expect(analyser).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignore une réponse arrivée après modification et sauvegarde pendant l'analyse", async () => {
+    let terminer!: () => void;
+    const attente = new Promise<void>((resolve) => { terminer = resolve; });
+    server.use(http.post("*/siege/demandes/:id/attestation/analyser-coherence/", async () => {
+      await attente;
+      return analyser();
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    const editeur = await attendreEditeur();
+    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.type(editeur, "Nouvelle version.");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await screen.findByText("Attestation enregistrée.");
+    terminer();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled());
+    expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
+    expect(analyser).toHaveBeenCalledTimes(1);
   });
 });
 

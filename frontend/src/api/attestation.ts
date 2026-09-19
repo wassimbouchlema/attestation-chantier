@@ -11,6 +11,19 @@ export interface AttestationApi {
   validated_at: string | null;
 }
 
+export interface ResultatCoherenceApi {
+  backend: "mistral" | "simulation";
+  coherent: boolean;
+  resume: string;
+  anomalies: {
+    type: "VALEUR_DIFFERENTE" | "INFORMATION_ABSENTE" | "CONTRADICTION";
+    champ: string;
+    valeur_fdr: string;
+    valeur_attestation: string;
+    message: string;
+  }[];
+}
+
 const urlAttestation = (id: string) => `/siege/demandes/${id}/attestation/`;
 
 const verifierReponse = async (response: Response, message: string) => {
@@ -18,6 +31,13 @@ const verifierReponse = async (response: Response, message: string) => {
     const corps = await lireJson<{ detail?: string; contenu_html?: string[] }>(response, message);
     throw new ErreurReseauOuServeur(corps.detail ?? corps.contenu_html?.[0] ?? message);
   }
+};
+
+export const analyserCoherenceAttestation = async (id: string): Promise<ResultatCoherenceApi> => {
+  const response = await requeteAuthentifiee(`${urlAttestation(id)}analyser-coherence/`, { method: "POST" });
+  const message = "Le contrôle de cohérence est indisponible. Réessayez plus tard.";
+  await verifierReponse(response, message);
+  return lireJson<ResultatCoherenceApi>(response, message);
 };
 
 export const recupererAttestation = async (id: string, signal?: AbortSignal): Promise<AttestationApi | null> => {

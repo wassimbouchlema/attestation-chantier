@@ -1,5 +1,6 @@
 import mimetypes
 
+from django.conf import settings
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from comptes.permissions import IsSiege
 
+from ..analyse_coherence import IAIndisponible, analyser_coherence
 from ..evaluation_risque import calculer_evaluation_risque
 from ..html_sanitization import nettoyer_html
 from ..models import (
@@ -104,6 +106,27 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         )
         response["Content-Disposition"] = f'inline; filename="preparation-attestation-{demande.id}.pdf"'
         return response
+
+    @action(detail=True, methods=["post"], url_path="attestation/analyser-coherence")
+    def analyser_coherence_attestation(self, request, pk=None):
+        demande = get_object_or_404(Demande.objects.select_related("fdr"), pk=pk)
+        conflit = self._conflit_traitement(demande)
+        if conflit is not None:
+            return conflit
+        attestation = get_object_or_404(Attestation, demande=demande)
+        if attestation.validated_at is not None:
+            return Response(
+                {"code": "ATTESTATION_DEJA_VALIDEE", "detail": "Cette attestation est déjà validée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        try:
+            resultat = analyser_coherence(demande.fdr, attestation)
+        except IAIndisponible:
+            return Response(
+                {"code": "IA_INDISPONIBLE", "detail": "Le contrôle de cohérence est indisponible. Réessayez plus tard."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({**resultat.model_dump(), "backend": settings.AI_COHERENCE_BACKEND})
 
     @action(detail=True, methods=["post"], url_path="demander-complements")
     def demander_complements(self, request, pk=None):
