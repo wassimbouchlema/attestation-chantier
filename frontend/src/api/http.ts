@@ -1,4 +1,9 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api";
+// Le repli localhost est réservé au dev : un build de production sans VITE_API_BASE_URL doit échouer visiblement.
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8000/api" : "");
+
+if (!API_BASE_URL) {
+  throw new Error("VITE_API_BASE_URL n’est pas défini pour ce build.");
+}
 
 /** Identifiants/session invalides (401) — la session doit être considérée comme terminée. */
 export class ErreurAuthentification extends Error {}

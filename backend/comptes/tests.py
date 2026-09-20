@@ -1,8 +1,16 @@
-from django.urls import reverse
+import importlib
+
+from django.test import override_settings
+from django.urls import include, path, reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 
+from . import urls as urls_comptes
 from .models import Role, Utilisateur
+
+urlpatterns = [
+    path("api/", include(urls_comptes.urlpatterns + urls_comptes.dev_urlpatterns)),
+]
 
 
 class RoleContrainteTests(APITestCase):
@@ -21,6 +29,7 @@ class RoleContrainteTests(APITestCase):
         self.assertEqual(recharge.role, Role.DISTRIBUTEUR)
 
 
+@override_settings(ROOT_URLCONF=__name__)
 class PermissionsParRoleTests(APITestCase):
     def setUp(self):
         self.distributeur = Utilisateur.objects.create_user(
@@ -67,6 +76,18 @@ class PermissionsParRoleTests(APITestCase):
     def test_anonyme_est_rejete(self):
         response = self.client.get(reverse("test_distributeur"))
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class RoutesDeDeveloppementTests(APITestCase):
+    def test_routes_de_test_absentes_quand_non_exposees(self):
+        try:
+            with override_settings(EXPOSE_DEV_ROUTES=False):
+                importlib.reload(urls_comptes)
+                noms = [route.name for route in urls_comptes.urlpatterns]
+            self.assertNotIn("test_siege", noms)
+            self.assertNotIn("test_distributeur", noms)
+        finally:
+            importlib.reload(urls_comptes)
 
 
 class MeEndpointTests(APITestCase):

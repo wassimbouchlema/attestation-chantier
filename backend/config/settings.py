@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 from dotenv import load_dotenv
 
@@ -34,7 +35,17 @@ SECRET_KEY = os.environ['SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+# Calculé au chargement : le runner de tests force settings.DEBUG à False.
+EXPOSE_DEV_ROUTES = DEBUG
+
+
+
+def env_list(name):
+    return [item.strip() for item in os.environ.get(name, '').split(',') if item.strip()]
+
+
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
 
 
 # Application definition
@@ -56,7 +67,9 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = 'comptes.Utilisateur'
 
 MIDDLEWARE = [
+    'config.health.HealthCheckMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -89,16 +102,42 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
+
+
+def database_from_url(url):
+    parsed = urlparse(url)
+    config = {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ['POSTGRES_DB'],
-        'USER': os.environ['POSTGRES_USER'],
-        'PASSWORD': os.environ['POSTGRES_PASSWORD'],
-        'HOST': os.environ['POSTGRES_HOST'],
-        'PORT': os.environ['POSTGRES_PORT'],
+        'NAME': unquote(parsed.path.lstrip('/')),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or '',
+        'PORT': str(parsed.port or ''),
     }
-}
+    options = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+    if options:
+        config['OPTIONS'] = options
+    return config
+
+
+if os.environ.get('DATABASE_URL'):
+    DATABASES = {'default': database_from_url(os.environ['DATABASE_URL'])}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['POSTGRES_DB'],
+            'USER': os.environ['POSTGRES_USER'],
+            'PASSWORD': os.environ['POSTGRES_PASSWORD'],
+            'HOST': os.environ['POSTGRES_HOST'],
+            'PORT': os.environ['POSTGRES_PORT'],
+        }
+    }
+    if os.environ.get('POSTGRES_SSLMODE'):
+        DATABASES['default']['OPTIONS'] = {'sslmode': os.environ['POSTGRES_SSLMODE']}
+
+DATABASES['default']['CONN_MAX_AGE'] = int(os.environ.get('DB_CONN_MAX_AGE', '60'))
+DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
 
 # Password validation
@@ -136,6 +175,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Fichiers médias (pièces justificatives uploadées)
@@ -144,6 +184,30 @@ STATIC_URL = 'static/'
 # contrôle d'accès n'existe pas (voir docs/regles-metier.md, DoD sécurité).
 
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Stockage par défaut : système de fichiers local (dev, tests). Si
+# AZURE_STORAGE_CONNECTION_STRING ou AZURE_STORAGE_ACCOUNT_NAME est défini, les
+# fichiers métier vont dans un conteneur Blob PRIVÉ (le filesystem d'un
+# conteneur est éphémère). Aucune URL de blob n'est exposée : les téléchargements
+# restent servis par les endpoints Django authentifiés.
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
+
+if os.environ.get('AZURE_STORAGE_CONNECTION_STRING') or os.environ.get('AZURE_STORAGE_ACCOUNT_NAME'):
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.azure_storage.AzureStorage',
+        'OPTIONS': {
+            'connection_string': os.environ.get('AZURE_STORAGE_CONNECTION_STRING'),
+            'account_name': os.environ.get('AZURE_STORAGE_ACCOUNT_NAME'),
+            'account_key': os.environ.get('AZURE_STORAGE_ACCOUNT_KEY'),
+            'azure_container': os.environ.get('AZURE_STORAGE_CONTAINER', 'media'),
+            'overwrite_files': False,
+            'expiration_secs': None,
+        },
+    }
 
 
 # Email
@@ -159,6 +223,8 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'False') == 'True'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@attestation-chantier.local')
 
 
@@ -190,3 +256,28 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = [
     origin for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if origin
 ]
+
+
+# Production (derrière l'ingress Azure Container Apps, qui termine le TLS)
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+
+
+# Logs vers stdout/stderr (collectés par Azure Container Apps)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'standard'},
+    },
+    'root': {'handlers': ['console'], 'level': os.environ.get('LOG_LEVEL', 'INFO')},
+}
