@@ -1,9 +1,9 @@
 import {
   Button, Loader, MainContainer, Message, Modal, ModalBody, ModalFooter,
-  ModalHeader, Restitution, Tag, TextareaInput, Title,
+  ModalHeader, Restitution, TextareaInput, Title,
 } from "@axa-fr/canopee-react/distributeur";
 
-import { LIBELLE_STATUT, VARIANT_STATUT } from "../../features/demandes/constants/statutLabel";
+import { LIBELLE_STATUT } from "../../features/demandes/constants/statutLabel";
 import { RecapitulatifFdr } from "../../features/fdr/components/RecapitulatifFdr/RecapitulatifFdr";
 import { SyntheseDossierPieces } from "../../features/fdr/components/SyntheseDossierPieces/SyntheseDossierPieces";
 import { SyntheseRisque } from "../../features/fdr/components/SyntheseRisque/SyntheseRisque";
@@ -51,7 +51,7 @@ export const SiegeDemandeConsultationPage = () => {
     <>
       <PageHeader
         title="Demande d'attestation"
-        actions={demande && <Tag variant={VARIANT_STATUT[demande.statut]}>{LIBELLE_STATUT[demande.statut]}</Tag>}
+        actions={demande && <span>Statut : {LIBELLE_STATUT[demande.statut]}</span>}
       />
       <MainContainer>
         <div className="container app-shell__content">
@@ -136,10 +136,7 @@ export const SiegeDemandeConsultationPage = () => {
                   </div>
                 )}
                 {traitable && (
-                  <div className="fdr-actions-globales">
-                    <Button variant="primary" onClick={ouvrirAttestation} disabled={preparationEnCours}>
-                      {demande.attestation_existe ? "Reprendre l'attestation" : "Préparer l'attestation"}
-                    </Button>
+                  <div className="siege-actions-traitement">
                     {peutDemanderComplements && (
                       <Button variant="secondary" onClick={() => ouvrirTraitement("demander-complements")}>
                         Demander des compléments
@@ -147,6 +144,9 @@ export const SiegeDemandeConsultationPage = () => {
                     )}
                     <Button variant="danger" onClick={() => ouvrirTraitement("refuser")}>
                       Refuser
+                    </Button>
+                    <Button variant="primary" onClick={ouvrirAttestation} disabled={preparationEnCours}>
+                      {demande.attestation_existe ? "Modifier l'attestation" : "Préparer l'attestation"}
                     </Button>
                   </div>
                 )}

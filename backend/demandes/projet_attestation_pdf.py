@@ -21,11 +21,12 @@ body { font-family: Helvetica; font-size: 10pt; color: #333333; }
 .label { font-size: 7pt; color: #666666; text-transform: uppercase; }
 .entete { margin-bottom: 18pt; }
 .bloc { font-size: 9pt; }
+.institutionnel { color: #00008f; font-weight: bold; }
+.signature { font-size: 15pt; font-weight: bold; color: #00008f; }
 .objet { border-bottom: 0.5pt solid #cccccc; padding-bottom: 10pt; margin-bottom: 16pt; }
-.titre-projet { font-size: 15pt; font-weight: bold; text-align: center; }
-.mention { font-size: 10pt; font-weight: bold; text-align: center; color: #bd4d2e; }
-.previsualisation { font-size: 8pt; text-align: center; color: #666666; margin-bottom: 12pt; }
-.titre-objet { font-size: 11pt; font-weight: bold; text-align: center; margin-top: 14pt; }
+.titre-objet { font-size: 15pt; font-weight: bold; text-align: center; margin-top: 14pt; }
+.mention { font-size: 10pt; font-weight: bold; text-align: center; color: #bd4d2e; margin-top: 2pt; }
+.previsualisation { font-size: 8pt; text-align: center; color: #666666; margin-top: 2pt; }
 .corps { margin-top: 16pt; }
 .pied { border-top: 0.5pt solid #cccccc; padding-top: 8pt; margin-top: 20pt;
         font-size: 8pt; color: #666666; }
@@ -50,18 +51,21 @@ def construire_html(
         marquage = '<p class="previsualisation">DOCUMENT DE PRÉVISUALISATION — NON VALIDÉ</p>'
         pied = ""
     else:
-        marquage = '<p class="titre-projet">PROJET D\'ATTESTATION</p><p class="mention">NON DÉFINITIF</p>'
+        marquage = '<p class="mention">NON DÉFINITIF</p>'
         pied = '<p class="pied">Validation définitive : réservée au siège.</p>'
     return f"""<html>
 <head><meta charset="utf-8" /><style>{FEUILLE_STYLE}</style></head>
 <body>
   <table class="entete" width="100%"><tr>
-    <td width="70%">
+    <td width="33%" valign="top">
       <p class="label">Votre agent général</p>
-      <p>{escape(_nom_agent(demande))}</p>
+      <p class="institutionnel">{escape(_nom_agent(demande))}</p>
     </td>
-    <td width="30%" align="right">
+    <td width="34%" align="center" valign="top">
       <img src="{chemin_logo_axa()}" width="52" height="52" />
+    </td>
+    <td width="33%" align="right" valign="top">
+      <p class="signature">Assurance et Banque</p>
     </td>
   </tr></table>
 
@@ -77,7 +81,7 @@ def construire_html(
       <p>{escape(fdr.assure_nom)}</p>
       <p>{escape(fdr.assure_ville)}</p>
       <p class="label">Date du courrier</p>
-      <p>{date.today().strftime("%d/%m/%Y")}</p>
+      <p class="institutionnel">{date.today().strftime("%d/%m/%Y")}</p>
     </td>
   </tr></table>
 
@@ -86,8 +90,8 @@ def construire_html(
     <p>Attestation d'assurance — Chantier {escape(fdr.chantier_nom)}</p>
   </div>
 
-  {marquage}
   <p class="titre-objet">ATTESTATION D'ASSURANCE</p>
+  {marquage}
 
   <div class="corps">{contenu_html}</div>
 

@@ -18,9 +18,12 @@ export const DocumentGabarit = ({ demande, agent }: { demande: DemandeDetail; ag
       <div className="projet-attestation-gabarit__entete">
         <div>
           <p className="projet-attestation-gabarit__label">Votre agent général</p>
-          <p>{agent ? nomAgent(agent) : demande.distributeur_nom}</p>
+          <p className="projet-attestation-gabarit__institutionnel">
+            {agent ? nomAgent(agent) : demande.distributeur_nom}
+          </p>
         </div>
         <img src={logoAxa} alt="AXA" className="projet-attestation-gabarit__logo" />
+        <p className="projet-attestation-gabarit__signature">Assurance et Banque</p>
       </div>
 
       <div className="projet-attestation-gabarit__colonnes">
@@ -38,7 +41,7 @@ export const DocumentGabarit = ({ demande, agent }: { demande: DemandeDetail; ag
           <p>{fdr.assure_ville}</p>
 
           <p className="projet-attestation-gabarit__label">Date du courrier</p>
-          <p>{formatDate(new Date().toISOString())}</p>
+          <p className="projet-attestation-gabarit__institutionnel">{formatDate(new Date().toISOString())}</p>
         </div>
       </div>
 

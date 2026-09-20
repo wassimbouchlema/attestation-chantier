@@ -117,7 +117,6 @@ describe("EditeurProjetAttestation — hydratation depuis un contenu asynchrone 
 
     const zoneEditable = document.querySelector(".ql-editor") as HTMLElement;
     for (const texte of [
-      "Projet d'attestation",
       "Non définitif",
       "Attestation d'assurance",
       "Validation définitive : réservée au siège.",

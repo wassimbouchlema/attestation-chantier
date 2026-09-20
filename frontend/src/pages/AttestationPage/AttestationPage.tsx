@@ -2,6 +2,7 @@ import { Button, Loader, MainContainer, Message, Modal, ModalBody, ModalFooter, 
 
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
 import { ResultatCoherence } from "../../features/attestation/components/ResultatCoherence";
+import { FeedbackFlottant } from "../../layout/FeedbackFlottant";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
 import "./AttestationPage.css";
@@ -14,6 +15,7 @@ export const AttestationPage = () => {
       <PageHeader title="Préparation d'attestation" actions={<Tag variant="warning">Non validée</Tag>} />
       <MainContainer>
         <div className="container app-shell__content">
+          <FeedbackFlottant message={page.messageSucces} onClose={page.fermerMessageSucces} />
           <Message variant="info" title="Cette attestation est en préparation et n'est pas encore validée." />
           {page.isLoading && <Loader mode="get">{null}</Loader>}
           {page.introuvable && <Message variant="error" title="Cette attestation est introuvable." />}
@@ -33,43 +35,49 @@ export const AttestationPage = () => {
                 onChange={page.modifierContenu}
                 disabled={page.enregistrementEnCours || page.validationEnCours}
               />
-              {page.succes && <Message variant="success" title="Attestation enregistrée." />}
               {page.erreurEnregistrement && <Message variant="error" title={page.erreurEnregistrement} />}
               {page.erreurPdf && <Message variant="error" title={page.erreurPdf} />}
               {page.erreurValidation && <Message variant="error" title={page.erreurValidation} />}
-              {page.dirty && <p>Enregistrez vos modifications avant de générer la prévisualisation.</p>}
-              {page.dirty && <p>Enregistrez vos modifications avant de valider l'attestation.</p>}
-              <div className="fdr-actions-globales">
-                <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
-                <div className="fdr-actions-globales__groupe">
+
+              <div className="attestation-actions-documentaires">
+                {page.dirty && <p>Enregistrez vos modifications avant de générer la prévisualisation.</p>}
+                <div className="attestation-actions-documentaires__boutons">
                   <Button variant="secondary" onClick={page.enregistrer} disabled={page.enregistrementEnCours || page.validationEnCours}>
                     {page.enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
                   </Button>
                   <Button variant="secondary" onClick={page.previsualiser} disabled={page.pdfDisabled}>
                     Prévisualiser
                   </Button>
-                  <Button variant="secondary" onClick={page.telecharger} disabled={page.pdfDisabled}>
+                  <Button variant="ghost" onClick={page.telecharger} disabled={page.pdfDisabled}>
                     Télécharger la prévisualisation
                   </Button>
+                </div>
+              </div>
+
+              <Surface className="attestation-coherence">
+                <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
+                  <div className="attestation-coherence__entete">
+                    <h2 id="titre-coherence">Contrôle de cohérence</h2>
+                    <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
+                      {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
+                    </Button>
+                  </div>
+                  {page.dirty && <p className="attestation-coherence__aide">Enregistrez vos modifications avant de lancer le contrôle.</p>}
+                  <div aria-live="polite">
+                    {page.erreurAnalyse && <Message variant="error" title={page.erreurAnalyse} />}
+                    {page.resultatAnalyse && <ResultatCoherence resultat={page.resultatAnalyse} />}
+                  </div>
+                </section>
+              </Surface>
+
+              <div className="attestation-decision">
+                {page.dirty && <p>Enregistrez vos modifications avant de valider l'attestation.</p>}
+                <div className="attestation-decision__boutons">
+                  <Button variant="secondary" onClick={page.retourner}>Retour à la demande</Button>
                   <Button variant="primary" onClick={page.ouvrirConfirmation} disabled={page.validationDisabled}>
                     Valider et accepter
                   </Button>
                 </div>
-              </div>
-              <div className="attestation-coherence">
-                <Surface>
-                  <section aria-labelledby="titre-coherence" aria-busy={page.analyseEnCours}>
-                    <h2 id="titre-coherence">Contrôle de cohérence</h2>
-                    {page.dirty && <p>Enregistrez vos modifications avant de lancer le contrôle.</p>}
-                    <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
-                      {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
-                    </Button>
-                    <div aria-live="polite">
-                      {page.erreurAnalyse && <Message variant="error" title={page.erreurAnalyse} />}
-                      {page.resultatAnalyse && <ResultatCoherence resultat={page.resultatAnalyse} />}
-                    </div>
-                  </section>
-                </Surface>
               </div>
             </>
           )}

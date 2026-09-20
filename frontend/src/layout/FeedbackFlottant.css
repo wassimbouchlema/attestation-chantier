@@ -1,0 +1,7 @@
+.feedback-flottant {
+  max-width: min(26rem, calc(100vw - 2rem));
+  position: fixed;
+  right: 1rem;
+  top: 1rem;
+  z-index: 1000;
+}

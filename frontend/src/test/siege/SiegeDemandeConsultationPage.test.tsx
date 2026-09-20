@@ -114,7 +114,7 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     mockEvaluationRisque(EVALUATION);
     renderPage();
 
-    expect(await screen.findByText("En cours")).toBeInTheDocument();
+    expect(await screen.findByText("Statut : En cours")).toBeInTheDocument();
     expect(screen.getByText(/17\/09\/2026/)).toBeInTheDocument();
     expect(screen.getByText("Jean Dupont")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Récapitulatif des informations" })).toBeInTheDocument();
@@ -140,6 +140,19 @@ describe("SiegeDemandeConsultationPage — affichage lecture seule", () => {
     expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Accepter/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Préparer l'attestation" })).toBeInTheDocument();
+  });
+
+  it("regroupe les actions de traitement à droite : compléments, refus, puis attestation", async () => {
+    mockDemande(demandeApi());
+    mockPieces(PIECES_COMPLETES);
+    mockEvaluationRisque(EVALUATION);
+    renderPage();
+    const preparer = await screen.findByRole("button", { name: "Préparer l'attestation" });
+    expect(within(preparer.parentElement as HTMLElement).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Demander des compléments",
+      "Refuser",
+      "Préparer l'attestation",
+    ]);
   });
 
   it("ne consulte ni n'affiche le projet du distributeur", async () => {
@@ -310,7 +323,7 @@ describe("SiegeDemandeConsultationPage — traitement", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refuser" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Demander des compléments" })).not.toBeInTheDocument();
-    expect(screen.getByText("En cours")).toBeInTheDocument();
+    expect(screen.getByText("Statut : En cours")).toBeInTheDocument();
     expect(poster).toHaveBeenCalledTimes(1);
   });
 

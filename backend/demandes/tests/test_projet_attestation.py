@@ -83,8 +83,8 @@ class ProjetAttestationEndpointTests(APITestCase):
         self.assertIn("10/01/2026", contenu)
         self.assertIn("30/06/2026", contenu)
         self.assertIn("Rénovation complète des bureaux", contenu)
-        self.assertIn("100000.00", contenu)
-        self.assertIn("50000.00", contenu)
+        self.assertIn("100 000,00 €", contenu)
+        self.assertIn("50 000,00 €", contenu)
         self.assertIn("Entreprise principale", contenu)
 
     def test_contenu_initial_ne_contient_que_le_corps_editable(self):
@@ -333,12 +333,12 @@ class ProjetAttestationPdfTests(APITestCase):
 
         for attendu in [
             "Votre agent général",
+            "Assurance et Banque",
             "Votre contrat",
             "Vos références",
             "Assuré",
             "Date du courrier",
             "Objet",
-            "PROJET D'ATTESTATION",
             "NON DÉFINITIF",
             "ATTESTATION D'ASSURANCE",
             "Validation définitive : réservée au siège.",
@@ -358,7 +358,7 @@ class ProjetAttestationPdfTests(APITestCase):
         contenu = self.client.get(self._url_pdf()).content
         texte = "".join(page.extract_text() for page in PdfReader(io.BytesIO(contenu)).pages)
 
-        self.assertIn("PROJET D'ATTESTATION", texte)
+        self.assertNotIn("PROJET D'ATTESTATION", texte)
         self.assertIn("NON DÉFINITIF", texte)
         self.assertIn("ATTESTATION D'ASSURANCE", texte)
         self.assertIn("AXA Construction", texte)

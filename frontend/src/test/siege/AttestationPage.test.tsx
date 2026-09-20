@@ -221,7 +221,7 @@ describe("Contrôle de cohérence SIÈGE", () => {
     await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
     expect(await screen.findByText("Incohérences détectées")).toBeInTheDocument();
     const resultat = screen.getByRole("region", { name: "Résultat du contrôle de cohérence" });
-    for (const texte of ["Analyse simulée", "Montant total du chantier", "12000000.00", "1200000.00",
+    for (const texte of ["Analyse simulée", "Montant total du chantier", "12 000 000,00 €", "1 200 000,00 €",
       "Le montant total diffère.", "Date de fin", "2027-06-30", "Information absente", "La date de fin est absente."]) {
       expect(within(resultat).getByText(texte)).toBeInTheDocument();
     }
@@ -309,7 +309,7 @@ describe("Préparation depuis le détail SIÈGE", () => {
     );
     const user = userEvent.setup();
     renderPage(true);
-    await user.click(await screen.findByRole("button", { name: "Reprendre l'attestation" }));
+    await user.click(await screen.findByRole("button", { name: "Modifier l'attestation" }));
     expect(await attendreEditeur()).toHaveTextContent("Tour Horizon");
     expect(preparer).not.toHaveBeenCalled();
   });
@@ -320,7 +320,7 @@ describe("Préparation depuis le détail SIÈGE", () => {
     })));
     renderPage(true);
     await screen.findByRole("heading", { name: "Traitement de la demande" });
-    expect(screen.queryByRole("button", { name: /Préparer|Reprendre/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Préparer|Modifier/ })).not.toBeInTheDocument();
   });
 });
 
@@ -379,27 +379,39 @@ describe("Validation et acceptation SIÈGE", () => {
   });
 });
 
-describe("Barre d'actions SIÈGE", () => {
-  it("Retour à gauche, actions d'attestation groupées à droite, contrôle de cohérence dans une section distincte", async () => {
+describe("Parcours d'actions SIÈGE", () => {
+  it("actions documentaires sous l'éditeur, contrôle de cohérence, puis zone de décision finale", async () => {
     renderPage();
     await attendreEditeur();
 
-    const retour = screen.getByRole("button", { name: "Retour à la demande" });
-    const barre = retour.closest(".fdr-actions-globales") as HTMLElement;
-    const groupe = barre.querySelector(".fdr-actions-globales__groupe") as HTMLElement;
-    expect(barre.firstElementChild).toBe(retour);
-    expect(barre.lastElementChild).toBe(groupe);
-    expect(within(groupe).getAllByRole("button").map((b) => b.textContent)).toEqual([
+    const enregistrer = screen.getByRole("button", { name: "Enregistrer" });
+    const groupeDoc = enregistrer.parentElement as HTMLElement;
+    expect(within(groupeDoc).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Enregistrer",
       "Prévisualiser",
       "Télécharger la prévisualisation",
-      "Valider et accepter",
     ]);
 
     const analyser = screen.getByRole("button", { name: "Analyser avec IA" });
-    expect(barre.contains(analyser)).toBe(false);
     const titre = screen.getByRole("heading", { name: "Contrôle de cohérence" });
-    expect(barre.compareDocumentPosition(titre) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(titre.closest(".surface")).toContainElement(analyser);
+
+    const valider = screen.getByRole("button", { name: "Valider et accepter" });
+    const retour = screen.getByRole("button", { name: "Retour à la demande" });
+    const decision = valider.parentElement as HTMLElement;
+    expect(within(decision).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Retour à la demande",
+      "Valider et accepter",
+    ]);
+    expect(decision).toContainElement(retour);
+    expect(groupeDoc.compareDocumentPosition(titre) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titre.compareDocumentPosition(valider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Valider et accepter reste disponible sans analyse IA", async () => {
+    renderPage();
+    await attendreEditeur();
+    expect(screen.getByRole("button", { name: "Valider et accepter" })).toBeEnabled();
+    expect(screen.queryByRole("region", { name: "Résultat du contrôle de cohérence" })).not.toBeInTheDocument();
   });
 });

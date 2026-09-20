@@ -1,9 +1,9 @@
-import { Pager, Table, TBody, Td, Th, THead, Tag, Tr } from "@axa-fr/canopee-react/distributeur";
+import { Pager, Table, TBody, Td, Th, THead, Tr } from "@axa-fr/canopee-react/distributeur";
 import { Link } from "react-router-dom";
 
 import type { DemandeDetail } from "../../../../api/demandes";
 import { formatDate } from "../../../../helpers/formatDate";
-import { LIBELLE_STATUT, VARIANT_STATUT } from "../../../demandes/constants/statutLabel";
+import { LIBELLE_STATUT } from "../../../demandes/constants/statutLabel";
 
 export const SiegeDemandesTable = ({
   demandes,
@@ -37,7 +37,7 @@ export const SiegeDemandesTable = ({
               <Td>{demande.envoye_at ? formatDate(demande.envoye_at) : "—"}</Td>
               <Td>{formatDate(demande.updated_at)}</Td>
               <Td>
-                <Tag variant={VARIANT_STATUT[demande.statut]}>{LIBELLE_STATUT[demande.statut]}</Tag>
+                {LIBELLE_STATUT[demande.statut]}
               </Td>
               <Td>
                 <Link

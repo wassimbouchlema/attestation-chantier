@@ -6,3 +6,30 @@
 .siege-traitement-textarea .af-form__input-textarea {
   width: 100%;
 }
+
+.siege-actions-traitement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.siege-document-transmis {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.siege-document-transmis p {
+  margin: 0;
+}
+
+.siege-document-transmis__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-left: auto;
+}

@@ -11,6 +11,7 @@ import {
   useTelechargerProjetAttestationPdf,
 } from "../../features/projetAttestation/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
+import { useMessageTemporaire } from "../../layout/useMessageTemporaire";
 
 export const useProjetAttestationPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,14 +40,14 @@ export const useProjetAttestationPage = () => {
     setDirty(true);
   };
 
-  const [messageSucces, setMessageSucces] = useState<string | null>(null);
+  const feedback = useMessageTemporaire();
 
   const enregistrer = () => {
     const contenu = contenuCourantRef.current ?? projetQuery.data?.contenu_html ?? "";
     sauvegarderMutation.mutate(contenu, {
       onSuccess: () => {
         setDirty(false);
-        setMessageSucces("Projet d'attestation enregistré.");
+        feedback.afficher("Projet d'attestation enregistré.");
       },
     });
   };
@@ -97,8 +98,8 @@ export const useProjetAttestationPage = () => {
     erreurPdf: pdfMutation.isError ? messageErreurAffichable(pdfMutation.error) : null,
     fermerErreurPdf: () => pdfMutation.reset(),
 
-    messageSucces,
-    fermerMessageSucces: () => setMessageSucces(null),
+    messageSucces: feedback.message,
+    fermerMessageSucces: feedback.fermer,
 
     retournerADemande: () => navigate(`/distributeur/demandes/${demandeId}/consultation`),
   };

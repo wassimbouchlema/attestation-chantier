@@ -214,8 +214,8 @@ class AnalyseCoherenceTests(APITestCase):
             ("chantier_nom", "Tour Horizon", "Chantier différent"),
             ("date_debut", "10/01/2026", "11/01/2026"),
             ("date_fin", "30/06/2026", "30/06/2027"),
-            ("montant_total", "100000.00", "120000.00"),
-            ("intervention_montant_prestation", "50000.00", "45000.00"),
+            ("montant_total", "100 000,00", "120 000,00"),
+            ("intervention_montant_prestation", "50 000,00", "45 000,00"),
             ("intervention_type", "Entreprise principale", "Sous-traitant"),
         ]
         for champ, valeur_fdr, valeur_attestation in cas:
@@ -233,7 +233,7 @@ class AnalyseCoherenceTests(APITestCase):
                 self.assertEqual(len(resultat.anomalies), 1)
                 self.assertEqual(resultat.anomalies[0].champ, champ)
                 self.assertEqual(resultat.anomalies[0].type, "VALEUR_DIFFERENTE")
-                self.assertEqual(resultat.anomalies[0].valeur_attestation, valeur_attestation)
+                self.assertEqual(resultat.anomalies[0].valeur_attestation, valeur_attestation.replace("\xa0", " "))
 
     @override_settings(AI_COHERENCE_BACKEND="simulation", MISTRAL_API_KEY="")
     def test_simulation_information_absente(self):
@@ -250,7 +250,7 @@ class AnalyseCoherenceTests(APITestCase):
     @override_settings(AI_COHERENCE_BACKEND="simulation", MISTRAL_API_KEY="")
     def test_simulation_montant_et_date_errones_puis_correction(self):
         contenu = generer_contenu_initial(self.fdr, preparation=True)
-        contenu_errone = contenu.replace("100000.00", "10000.00").replace("30/06/2026", "30/06/2027")
+        contenu_errone = contenu.replace("100 000,00", "10 000,00").replace("30/06/2026", "30/06/2027")
         Attestation.objects.filter(pk=self.attestation.pk).update(contenu_html=contenu_errone)
         incoherent = self.client.post(self.url)
         self.assertEqual(incoherent.status_code, 200)

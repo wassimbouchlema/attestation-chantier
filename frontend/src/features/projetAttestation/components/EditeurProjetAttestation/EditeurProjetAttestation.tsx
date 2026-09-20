@@ -50,13 +50,8 @@ export const EditeurProjetAttestation = ({
         <DocumentGabarit demande={demande} agent={agent} />
 
         <div className="projet-attestation-titres">
-          {!preparation && (
-            <>
-              <p className="projet-attestation-titres__projet">Projet d'attestation</p>
-              <p className="projet-attestation-titres__mention">Non définitif</p>
-            </>
-          )}
           <h2 className="projet-attestation-titres__objet">Attestation d'assurance</h2>
+          {!preparation && <p className="projet-attestation-titres__mention">Non définitif</p>}
         </div>
 
         <div className="projet-attestation-corps" ref={conteneurRef} />

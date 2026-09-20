@@ -6,8 +6,7 @@ a déjà validé la demande au moment de l'envoi), pas de valeur de repli
 
 Périmètre strict : ce contenu est le **corps éditable** du document, et rien
 d'autre. Tout ce qui relève du gabarit fixe (logo AXA, bloc agent, contrat et
-références, date du courrier, objet, mentions « PROJET D'ATTESTATION — NON
-DÉFINITIF » et « ATTESTATION D'ASSURANCE », pied de page de validation siège)
+références, date du courrier, objet, titre « ATTESTATION D'ASSURANCE », mention « NON DÉFINITIF » et pied de page de validation siège)
 est rendu autour de cette zone par le gabarit — jamais dupliqué ici, sinon le
 document afficherait deux fois les mêmes titres. Aucune donnée absente du FDR
 n'est inventée (SIREN/SIRET, numéro client AXA, ORIAS, identité de l'agent...).
@@ -19,7 +18,14 @@ faire évoluer/sanitizer que confier la structure du document au client.
 
 from django.utils.html import escape
 
+from decimal import Decimal
+
 from .models import FormulaireRisque, TypeChantier, TypeIntervention
+
+
+def _formater_montant(montant: Decimal) -> str:
+    # Espaces insécables : le montant ne doit pas se couper en fin de ligne.
+    return f"{montant:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
 
 def generer_contenu_initial(fdr: FormulaireRisque, *, preparation: bool = False) -> str:
@@ -27,16 +33,20 @@ def generer_contenu_initial(fdr: FormulaireRisque, *, preparation: bool = False)
     type_intervention_libelle = TypeIntervention(fdr.intervention_type).label
     date_debut = fdr.date_debut.strftime("%d/%m/%Y") if fdr.date_debut else ""
     date_fin = fdr.date_fin.strftime("%d/%m/%Y") if fdr.date_fin else ""
-    montant_total = f"{fdr.montant_total} €" if fdr.montant_total is not None else ""
+    montant_total = _formater_montant(fdr.montant_total) if fdr.montant_total is not None else ""
     montant_prestation = (
-        f"{fdr.intervention_montant_prestation} €"
+        _formater_montant(fdr.intervention_montant_prestation)
         if fdr.intervention_montant_prestation is not None
         else ""
     )
+    attestation_de = (
+        "AXA France atteste que :"
+        if preparation
+        else "AXA France atteste, sous réserve de validation définitive par le siège, que :"
+    )
 
     return (
-        "<p>AXA France atteste, sous réserve de validation définitive par le "
-        "siège, que :</p>"
+        f"<p>{attestation_de}</p>"
         f"<p>{escape(fdr.assure_nom)}<br>{escape(fdr.assure_ville)}</p>"
         f"<p>est titulaire du contrat n° {escape(fdr.assure_numero_contrat)}.</p>"
         "<h2>CHANTIER</h2>"

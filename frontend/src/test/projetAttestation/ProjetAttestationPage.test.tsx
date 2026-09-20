@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -177,7 +177,6 @@ describe("ProjetAttestationPage — gabarit documentaire", () => {
     // jamais dans la zone Quill : `contenu_html` ne les contient plus, sinon
     // ils s'afficheraient en double (gabarit + contenu).
     for (const texte of [
-      "Projet d'attestation",
       "Attestation d'assurance",
       "Validation définitive : réservée au siège.",
     ]) {
@@ -185,6 +184,7 @@ describe("ProjetAttestationPage — gabarit documentaire", () => {
       expect(dansLaFeuille).toHaveLength(1);
       expect(editeur.contains(dansLaFeuille[0])).toBe(false);
     }
+    expect(within(feuille).queryByText("Projet d'attestation")).not.toBeInTheDocument();
   });
 });
 
@@ -407,5 +407,25 @@ describe("ProjetAttestationPage — retour", () => {
     await user.click(screen.getByRole("button", { name: "Retour à la demande" }));
 
     expect(await screen.findByText("Consultation de la demande (page)")).toBeInTheDocument();
+  });
+});
+
+describe("ProjetAttestationPage — organisation des actions", () => {
+  it("navigation à gauche, actions documentaires groupées à droite", async () => {
+    mockProjet();
+    mockDemande();
+    renderPage();
+
+    await attendreEditeur();
+    const retour = screen.getByRole("button", { name: "Retour à la demande" });
+    const barre = retour.closest(".fdr-actions-globales") as HTMLElement;
+    const groupe = barre.querySelector(".fdr-actions-globales__groupe") as HTMLElement;
+    expect(barre.firstElementChild).toBe(retour);
+    expect(barre.lastElementChild).toBe(groupe);
+    expect(within(groupe).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Enregistrer",
+      "Prévisualiser",
+      "Télécharger le projet",
+    ]);
   });
 });

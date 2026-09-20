@@ -7,6 +7,7 @@ import { messageErreurAffichable } from "../../features/demandes/helpers/message
 import { ouvrirPdfDansUnNouvelOnglet, telechargerPdf } from "../../features/demandes/helpers/pdfActions";
 import { useDemandeSiege } from "../../features/siege/queries";
 import { useDocumentTitle } from "../../layout/useDocumentTitle";
+import { useMessageTemporaire } from "../../layout/useMessageTemporaire";
 
 export const useAttestationPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,7 +20,7 @@ export const useAttestationPage = () => {
   const pdf = useAttestationPdf(demandeId);
   const contenuRef = useRef<string | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [succes, setSucces] = useState(false);
+  const feedback = useMessageTemporaire();
   const analyse = useAnalyserCoherence(demandeId);
   const validation = useValiderAttestation(demandeId);
   const [confirmationOuverte, setConfirmationOuverte] = useState(false);
@@ -82,7 +83,7 @@ export const useAttestationPage = () => {
       onSuccess: (document) => {
         contenuRef.current = document.contenu_html;
         setDirty(false);
-        setSucces(true);
+        feedback.afficher("Attestation enregistrée.");
       },
     });
   };
@@ -104,7 +105,7 @@ export const useAttestationPage = () => {
       setErreurAnalyse(null);
       contenuRef.current = html;
       setDirty(true);
-      setSucces(false);
+      feedback.fermer();
     },
     dirty,
     analyser,
@@ -129,7 +130,8 @@ export const useAttestationPage = () => {
     enregistrer,
     enregistrementEnCours: sauvegarde.isPending,
     erreurEnregistrement: sauvegarde.isError ? messageErreurAffichable(sauvegarde.error) : null,
-    succes,
+    messageSucces: feedback.message,
+    fermerMessageSucces: feedback.fermer,
     pdfDisabled: dirty || sauvegarde.isPending || pdf.isPending || validation.isPending,
     erreurPdf: pdf.isError ? messageErreurAffichable(pdf.error) : null,
     previsualiser: () => {

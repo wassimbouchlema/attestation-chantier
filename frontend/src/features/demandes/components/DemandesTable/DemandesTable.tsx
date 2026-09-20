@@ -1,10 +1,10 @@
-import { Button, Pager, Table, TBody, Td, Th, THead, Tag, Tr } from "@axa-fr/canopee-react/distributeur";
+import { Button, Pager, Table, TBody, Td, Th, THead, Tr } from "@axa-fr/canopee-react/distributeur";
 import { Link } from "react-router-dom";
 
 import type { Demande } from "../../../../api/demandes";
 import { formatDate } from "../../../../helpers/formatDate";
 import { LIBELLE_DECISION } from "../../constants/optionsDecision";
-import { LIBELLE_STATUT, VARIANT_STATUT } from "../../constants/statutLabel";
+import { LIBELLE_STATUT } from "../../constants/statutLabel";
 import "./DemandesTable.css";
 
 export const DemandesTable = ({
@@ -43,7 +43,7 @@ export const DemandesTable = ({
               <Td>{demande.assure_nom || "—"}</Td>
               <Td>{demande.chantier_nom || "—"}</Td>
               <Td className="demandes-table__cell-centre">
-                <Tag variant={VARIANT_STATUT[demande.statut]}>{LIBELLE_STATUT[demande.statut]}</Tag>
+                {LIBELLE_STATUT[demande.statut]}
               </Td>
               <Td className="demandes-table__cell-centre">
                 {demande.decision ? LIBELLE_DECISION[demande.decision] : "—"}

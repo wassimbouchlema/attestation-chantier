@@ -1,6 +1,7 @@
 import { Button, Loader, MainContainer, Message, Tag } from "@axa-fr/canopee-react/distributeur";
 
 import { EditeurProjetAttestation } from "../../features/projetAttestation/components/EditeurProjetAttestation/EditeurProjetAttestation";
+import { FeedbackFlottant } from "../../layout/FeedbackFlottant";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
 import "./ProjetAttestationPage.css";
@@ -39,14 +40,7 @@ export const ProjetAttestationPage = () => {
         <div className="container app-shell__content">
           <Message variant="info" title="Ce document est un projet. L'attestation définitive sera validée par le siège." />
 
-          {messageSucces && (
-            <Message
-              variant="success"
-              title={messageSucces}
-              onClose={fermerMessageSucces}
-              closeButtonAriaLabel="Fermer"
-            />
-          )}
+          <FeedbackFlottant message={messageSucces} onClose={fermerMessageSucces} />
 
           {isLoading && <Loader mode="get">{null}</Loader>}
 
@@ -101,15 +95,17 @@ export const ProjetAttestationPage = () => {
                 <Button variant="secondary" onClick={retournerADemande}>
                   Retour à la demande
                 </Button>
-                <Button variant="primary" onClick={enregistrer} disabled={enregistrementEnCours}>
-                  {enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
-                </Button>
-                <Button variant="secondary" onClick={previsualiser} disabled={pdfDisabled}>
-                  Prévisualiser
-                </Button>
-                <Button variant="secondary" onClick={telecharger} disabled={pdfDisabled}>
-                  {pdfEnCours ? "Génération…" : "Télécharger le projet"}
-                </Button>
+                <div className="fdr-actions-globales__groupe">
+                  <Button variant="primary" onClick={enregistrer} disabled={enregistrementEnCours}>
+                    {enregistrementEnCours ? "Enregistrement…" : "Enregistrer"}
+                  </Button>
+                  <Button variant="secondary" onClick={previsualiser} disabled={pdfDisabled}>
+                    Prévisualiser
+                  </Button>
+                  <Button variant="secondary" onClick={telecharger} disabled={pdfDisabled}>
+                    {pdfEnCours ? "Génération…" : "Télécharger le projet"}
+                  </Button>
+                </div>
               </div>
             </>
           )}

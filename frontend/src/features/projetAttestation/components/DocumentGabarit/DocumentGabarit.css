@@ -2,13 +2,25 @@
   font-size: 0.875rem;
 }
 .projet-attestation-gabarit__entete {
-  display: flex;
-  justify-content: space-between;
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr auto 1fr;
   margin-bottom: 2.5rem;
 }
 .projet-attestation-gabarit__logo {
   height: 3.25rem;
   width: 3.25rem;
+}
+.projet-attestation-gabarit__signature {
+  color: var(--axablue80);
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: right;
+}
+.projet-attestation-gabarit__institutionnel {
+  color: var(--axablue80);
+  font-weight: 600;
 }
 .projet-attestation-gabarit__colonnes {
   display: flex;

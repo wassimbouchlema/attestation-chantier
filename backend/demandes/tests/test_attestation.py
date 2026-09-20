@@ -48,7 +48,7 @@ class AttestationTests(APITestCase):
             response.data["contenu_html"], nettoyer_html(generer_contenu_initial(self.demande.fdr, preparation=True))
         )
         for valeur in ["AXA Construction", "1234567890123", "Tour Horizon", "Lyon", "10/01/2026", "30/06/2026",
-                       "Rénovation complète des bureaux", "100000.00", "50000.00", "Entreprise principale",
+                       "Rénovation complète des bureaux", "100 000,00 €", "50 000,00 €", "Entreprise principale",
                        "Document préparé à partir des informations déclarées dans le formulaire de risque."]:
             self.assertIn(valeur, response.data["contenu_html"])
         self.assertNotIn("Projet établi à partir", response.data["contenu_html"])

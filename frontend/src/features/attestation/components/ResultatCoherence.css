@@ -1,0 +1,49 @@
+.resultat-coherence {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.resultat-coherence__statut {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+}
+
+.resultat-coherence__origine {
+  color: var(--gray60);
+  font-size: 0.875rem;
+}
+
+.resultat-coherence__resume {
+  margin: 0;
+}
+
+.resultat-coherence__anomalie {
+  border: 0.0625rem solid var(--gray40);
+  border-left: 0.25rem solid var(--orange40);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+}
+
+.resultat-coherence__anomalie h3 {
+  margin: 0 0 1rem;
+}
+
+.resultat-coherence__comparaison {
+  display: grid;
+  gap: 1rem 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin-bottom: 1rem;
+}
+
+.resultat-coherence__message {
+  margin: 0;
+}
+
+.resultat-coherence__rappel {
+  color: var(--gray60);
+  font-size: 0.875rem;
+  margin: 0;
+}

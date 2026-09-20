@@ -1,6 +1,8 @@
-import { Message, Restitution, Tag } from "@axa-fr/canopee-react/distributeur";
+import { Restitution, Tag } from "@axa-fr/canopee-react/distributeur";
 
 import type { ResultatCoherenceApi } from "../../../api/attestation";
+import { formaterValeurCoherence } from "../helpers/formaterValeurCoherence";
+import "./ResultatCoherence.css";
 
 const libellesChamps: Record<string, string> = {
   assure_nom: "Nom de l'assuré",
@@ -25,20 +27,30 @@ const libellesChamps: Record<string, string> = {
 };
 
 export const ResultatCoherence = ({ resultat }: { resultat: ResultatCoherenceApi }) => (
-  <section aria-label="Résultat du contrôle de cohérence">
-    {resultat.backend === "simulation" && <Tag variant="information">Analyse simulée</Tag>}
-    <Tag variant={resultat.coherent ? "success" : "warning"}>
-      {resultat.coherent ? "Cohérent" : "Incohérences détectées"}
-    </Tag>
-    <Message variant={resultat.coherent ? "success" : "warning"} title={resultat.resume} />
+  <section aria-label="Résultat du contrôle de cohérence" className="resultat-coherence">
+    <div className="resultat-coherence__statut">
+      <Tag variant={resultat.coherent ? "success" : "warning"}>
+        {resultat.coherent ? "Cohérent" : "Incohérences détectées"}
+      </Tag>
+      {resultat.backend === "simulation" && <span className="resultat-coherence__origine">Analyse simulée</span>}
+    </div>
+    <p className="resultat-coherence__resume">{resultat.resume}</p>
     {resultat.anomalies.map((anomalie, index) => (
-      <section key={`${anomalie.champ}-${index}`}>
+      <article key={`${anomalie.champ}-${index}`} className="resultat-coherence__anomalie">
         <h3>{libellesChamps[anomalie.champ] ?? anomalie.champ}</h3>
-        <Restitution label="Valeur FDR">{anomalie.valeur_fdr}</Restitution>
-        <Restitution label="Valeur attestation">{anomalie.valeur_attestation || "Information absente"}</Restitution>
-        <p>{anomalie.message}</p>
-      </section>
+        <div className="resultat-coherence__comparaison">
+          <Restitution label="Valeur FDR">{formaterValeurCoherence(anomalie.champ, anomalie.valeur_fdr)}</Restitution>
+          <Restitution label="Valeur attestation">
+            {anomalie.valeur_attestation
+              ? formaterValeurCoherence(anomalie.champ, anomalie.valeur_attestation)
+              : "Information absente"}
+          </Restitution>
+        </div>
+        <p className="resultat-coherence__message">{anomalie.message}</p>
+      </article>
     ))}
-    <p>Ce contrôle est une aide à la vérification. La décision reste au SIÈGE.</p>
+    <p className="resultat-coherence__rappel">
+      Ce contrôle est une aide à la vérification. La décision reste au SIÈGE.
+    </p>
   </section>
 );

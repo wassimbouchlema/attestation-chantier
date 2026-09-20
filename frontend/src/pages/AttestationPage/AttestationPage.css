@@ -1,3 +1,46 @@
+.attestation-actions-documentaires {
+  margin: 1.5rem auto 0;
+  max-width: 42rem;
+}
+
+.attestation-actions-documentaires__boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
 .attestation-coherence {
   margin-top: 2rem;
+}
+
+.attestation-coherence__entete {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.attestation-coherence__entete h2 {
+  margin: 0;
+}
+
+.attestation-coherence__aide {
+  color: var(--gray60);
+  margin-bottom: 1rem;
+}
+
+.attestation-decision {
+  border-top: 0.0625rem solid var(--gray40);
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+
+.attestation-decision__boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
 }
