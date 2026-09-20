@@ -5,6 +5,7 @@ from .views import (
     DemandeViewSet,
     NotificationViewSet,
     PieceJustificativeViewSet,
+    ReportingView,
     SiegeDemandeViewSet,
     SiegePieceJustificativeViewSet,
 )
@@ -15,6 +16,7 @@ router.register("notifications", NotificationViewSet, basename="notification")
 router.register("siege/demandes", SiegeDemandeViewSet, basename="siege-demande")
 
 urlpatterns = router.urls + [
+    path("reporting/", ReportingView.as_view(), name="reporting"),
     path(
         "demandes/<uuid:demande_id>/pieces/",
         PieceJustificativeViewSet.as_view({"get": "list", "post": "create"}),

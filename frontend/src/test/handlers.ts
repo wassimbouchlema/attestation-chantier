@@ -4,6 +4,7 @@ import type { Utilisateur } from "../api/auth";
 import type { Demande, DemandesPaginees, DemandesPagineesDetail, FormulaireRisqueApi } from "../api/demandes";
 import type { EvaluationRisqueApi } from "../api/evaluationRisque";
 import type { NotificationsResponseApi } from "../api/notifications";
+import type { ReportingApi } from "../api/reporting";
 import type { PiecesResponseApi } from "../api/pieces";
 
 export const UTILISATEUR_DISTRIBUTEUR: Utilisateur = {
@@ -75,6 +76,11 @@ export const handlers = [
 
   http.get("*/notifications/", () => {
     const reponse: NotificationsResponseApi = { non_vues: 0, notifications: [] };
+    return HttpResponse.json(reponse);
+  }),
+
+  http.get("*/reporting/", () => {
+    const reponse: ReportingApi = { total: 0, brouillons: 0, en_cours: 0, acceptees: 0, refusees: 0 };
     return HttpResponse.json(reponse);
   }),
 

@@ -1,0 +1,25 @@
+.accueil-synthese {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  margin-inline: auto;
+  max-width: 90rem;
+}
+
+@media (min-width: 1200px) {
+  .accueil-synthese {
+    align-items: start;
+    gap: 1.5rem;
+    grid-template-columns: minmax(0, 3fr) minmax(16rem, 1fr);
+  }
+
+  .accueil-synthese__synthese {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .accueil-synthese__principal {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}

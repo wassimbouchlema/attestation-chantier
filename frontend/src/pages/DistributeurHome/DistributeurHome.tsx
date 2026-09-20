@@ -3,10 +3,11 @@ import assignmentIcon from "@material-symbols/svg-400/outlined/assignment.svg";
 
 import { DemandesFiltres } from "../../features/demandes/components/DemandesFilter/DemandesFiltres";
 import { DemandesTable } from "../../features/demandes/components/DemandesTable/DemandesTable";
+import { ReportingSynthese } from "../../features/reporting/components/ReportingSynthese/ReportingSynthese";
 import { SupprimerBrouillonModal } from "../../features/demandes/components/SupprimerBrouillonModal/SupprimerBrouillonModal";
+import { AccueilAvecSynthese } from "../../layout/AccueilAvecSynthese";
 import { PageHeader } from "../../layout/PageHeader";
 import { Surface } from "../../layout/Surface";
-import "./DistributeurHome.css";
 import { useDistributeurHome } from "./useDistributeurHome";
 
 export const DistributeurHome = () => {
@@ -79,7 +80,7 @@ export const DistributeurHome = () => {
             />
           )}
 
-          <div className="distributeur-home__liste">
+          <AccueilAvecSynthese synthese={<ReportingSynthese inclureBrouillons />}>
             <DemandesFiltres
               filtres={filtres}
               onStatutChange={changerStatut}
@@ -127,7 +128,7 @@ export const DistributeurHome = () => {
                 attestationEnCours={attestationEnCours}
               />
             )}
-          </div>
+          </AccueilAvecSynthese>
         </div>
       </MainContainer>
 
