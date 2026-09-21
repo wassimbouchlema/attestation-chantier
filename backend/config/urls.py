@@ -25,7 +25,7 @@ urlpatterns = [
     path('api/', include('demandes.urls')),
 ]
 
-if settings.EXPOSE_DEV_ROUTES:
+if settings.EXPOSE_API_DOCS:
     urlpatterns += [
         path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
         path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

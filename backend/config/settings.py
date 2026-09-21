@@ -38,6 +38,12 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 # Calculé au chargement : le runner de tests force settings.DEBUG à False.
 EXPOSE_DEV_ROUTES = DEBUG
 
+# Contrôle l'exposition de Swagger/OpenAPI (/api/schema/ et /api/docs/),
+# indépendamment de EXPOSE_DEV_ROUTES (routes /api/test/*).
+EXPOSE_API_DOCS = os.environ.get(
+    'EXPOSE_API_DOCS',
+    'True' if DEBUG else 'False',
+) == 'True'
 
 
 def env_list(name):
