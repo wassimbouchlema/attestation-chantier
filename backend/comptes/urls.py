@@ -1,12 +1,11 @@
 from django.conf import settings
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .views import EspaceDistributeurTest, EspaceSiegeTest, Me
+from .views import EspaceDistributeurTest, EspaceSiegeTest, LoginView, Me, RefreshView
 
 urlpatterns = [
-    path("auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/login/", LoginView.as_view(), name="token_obtain_pair"),
+    path("auth/refresh/", RefreshView.as_view(), name="token_refresh"),
     path("auth/me/", Me.as_view(), name="me"),
 ]
 
