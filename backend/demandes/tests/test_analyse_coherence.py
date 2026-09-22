@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from unittest.mock import patch
 
 import httpx
@@ -9,7 +10,7 @@ from mistralai.client import Mistral
 from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
-from ..analyse_coherence import PROMPT_SYSTEME, ResultatCoherence, construire_entree
+from ..analyse_coherence import PROMPT_SYSTEME, ResultatCoherence, _simuler, construire_entree
 from ..models import (
     Attestation, DecisionDemande, Demande, DemandeComplement, FormulaireRisque,
     Notification, ProjetAttestation, StatutDemande,
@@ -114,27 +115,48 @@ class AnalyseCoherenceTests(APITestCase):
         self.assertEqual(entree["fdr"]["assure_nom"], self.fdr.assure_nom)
         self.assertEqual(entree["fdr"]["montant_total"], "100000.00")
         self.assertEqual(entree["fdr"]["date_fin"], "2026-06-30")
-        self.assertIs(entree["fdr"]["chantier_atypique"], False)
         self.assertNotIn("SECRET PROJET", json.dumps(messages))
         for champ in ["distributeur", "demande", "id", "fdr_pdf", "pieces", "statut", "decision"]:
             self.assertNotIn(champ, entree["fdr"])
 
-    def test_sanitization_texte_et_champs_conditionnels(self):
+    def test_sanitization_texte(self):
         self.attestation.contenu_html = '<p onclick="secret">Un <strong>mot</strong>.</p><p>Deux&nbsp;mots</p><img src="secret">'
-        self.fdr.usage_autre_texte = "À exclure"
-        self.fdr.activite_non_couverte_texte = "À exclure"
-        self.fdr.modification_structure = True
         entree = construire_entree(self.fdr, self.attestation)
         self.assertEqual(entree["attestation"], "Un mot.\nDeux mots")
-        for champ in ["usage_autre_texte", "activite_non_couverte_texte", "modification_structure"]:
-            self.assertNotIn(champ, entree["fdr"])
-        self.fdr.usage = "AUTRE"
-        self.fdr.activite_couverte = False
+
+    def test_champs_hors_perimetre_jamais_envoyes(self):
+        # Ces champs ne sont jamais rendus par generer_contenu_initial() :
+        # même dans les conditions qui les rendaient auparavant "actifs"
+        # (RENOVATION, usage AUTRE, activité non couverte), ils ne doivent
+        # jamais apparaître dans entree["fdr"].
         self.fdr.type_chantier = "RENOVATION"
+        self.fdr.modification_structure = True
+        self.fdr.usage = "AUTRE"
+        self.fdr.usage_autre_texte = "À exclure"
+        self.fdr.activite_couverte = False
+        self.fdr.activite_non_couverte_texte = "À exclure"
+        self.fdr.travaux_standards = False
+        self.fdr.chantier_atypique = False
         entree = construire_entree(self.fdr, self.attestation)
-        self.assertEqual(entree["fdr"]["usage_autre_texte"], "À exclure")
-        self.assertEqual(entree["fdr"]["activite_non_couverte_texte"], "À exclure")
-        self.assertTrue(entree["fdr"]["modification_structure"])
+        for champ in [
+            "modification_structure", "usage", "usage_autre_texte",
+            "activite_couverte", "activite_non_couverte_texte",
+            "travaux_standards", "chantier_atypique",
+        ]:
+            self.assertNotIn(champ, entree["fdr"])
+
+    def test_valeur_falsy_non_supprimee(self):
+        self.fdr.montant_total = Decimal("0.00")
+        entree = construire_entree(self.fdr, self.attestation)
+        self.assertEqual(entree["fdr"]["montant_total"], "0.00")
+
+    def test_prompt_demande_comparaison_semantique_non_litterale(self):
+        # Insensible au retour à la ligne du prompt multi-lignes : seul le
+        # contenu importe, pas son découpage en lignes.
+        texte = " ".join(PROMPT_SYSTEME.split())
+        self.assertIn("par son sens et sa valeur, jamais par correspondance littérale avec le nom technique", texte)
+        self.assertIn("Contrat n°", texte)
+        self.assertIn("cette contrainte porte sur ta réponse, jamais sur ta recherche", texte)
 
     def verifier_indisponible(self):
         response = self.client.post(self.url)
@@ -210,8 +232,11 @@ class AnalyseCoherenceTests(APITestCase):
         contenu = generer_contenu_initial(self.fdr, preparation=True)
         cas = [
             ("assure_nom", "AXA Construction", "Entreprise différente"),
+            ("assure_ville", "Paris", "Ville différente"),
             ("assure_numero_contrat", "1234567890123", "987654321"),
             ("chantier_nom", "Tour Horizon", "Chantier différent"),
+            ("chantier_ville", "Lyon", "Autre ville"),
+            ("type_chantier", "Construction neuve", "Rénovation"),
             ("date_debut", "10/01/2026", "11/01/2026"),
             ("date_fin", "30/06/2026", "30/06/2027"),
             ("montant_total", "100 000,00", "120 000,00"),
@@ -270,3 +295,49 @@ class AnalyseCoherenceTests(APITestCase):
             "Aucune incohérence détectée entre le FDR et l'attestation enregistrée.",
         )
         self.provider.assert_not_called()
+
+    def test_simulation_villes_et_type_chantier_identiques_avec_variations(self):
+        contenu = generer_contenu_initial(self.fdr, preparation=True)
+        contenu_varie = (
+            contenu.replace("Paris", "  PARIS  ")
+            .replace("Lyon", "lyon")
+            .replace("Construction neuve", "CONSTRUCTION NEUVE")
+        )
+        entree = construire_entree(self.fdr, Attestation(contenu_html=contenu_varie))
+        resultat = _simuler(entree)
+        self.assertEqual(resultat.anomalies, [])
+
+    def test_simulation_ville_identique_malgre_accents(self):
+        self.fdr.assure_ville = "Orléans"
+        contenu = generer_contenu_initial(self.fdr, preparation=True).replace("Orléans", "ORLEANS")
+        entree = construire_entree(self.fdr, Attestation(contenu_html=contenu))
+        resultat = _simuler(entree)
+        self.assertNotIn("assure_ville", {a.champ for a in resultat.anomalies})
+
+    def test_simulation_bloc_assure_ligne_manquante_echoue_pour_les_deux_champs(self):
+        contenu = generer_contenu_initial(self.fdr, preparation=True)
+        for bloc_restant in ["<p>AXA Construction</p>", "<p>Paris</p>"]:
+            with self.subTest(bloc_restant=bloc_restant):
+                contenu_incomplet = contenu.replace("<p>AXA Construction<br>Paris</p>", bloc_restant)
+                entree = construire_entree(self.fdr, Attestation(contenu_html=contenu_incomplet))
+                resultat = _simuler(entree)
+                anomalies_bloc = [a for a in resultat.anomalies if a.champ in {"assure_nom", "assure_ville"}]
+                self.assertEqual({a.champ for a in anomalies_bloc}, {"assure_nom", "assure_ville"})
+                self.assertTrue(all(a.type == "INFORMATION_ABSENTE" for a in anomalies_bloc))
+
+    def test_simulation_bloc_chantier_ligne_manquante_echoue_pour_les_deux_champs(self):
+        contenu = generer_contenu_initial(self.fdr, preparation=True)
+        for bloc_restant in ["<p>Tour Horizon</p>", "<p>Lyon</p>"]:
+            with self.subTest(bloc_restant=bloc_restant):
+                contenu_incomplet = contenu.replace("<p>Tour Horizon<br>Lyon</p>", bloc_restant)
+                entree = construire_entree(self.fdr, Attestation(contenu_html=contenu_incomplet))
+                resultat = _simuler(entree)
+                anomalies_bloc = [a for a in resultat.anomalies if a.champ in {"chantier_nom", "chantier_ville"}]
+                self.assertEqual({a.champ for a in anomalies_bloc}, {"chantier_nom", "chantier_ville"})
+                self.assertTrue(all(a.type == "INFORMATION_ABSENTE" for a in anomalies_bloc))
+
+    def test_intervention_description_hors_perimetre_simulation(self):
+        self.fdr.intervention_description = "Description totalement différente du texte de l'attestation"
+        entree = construire_entree(self.fdr, self.attestation)
+        resultat = _simuler(entree)
+        self.assertNotIn("intervention_description", {a.champ for a in resultat.anomalies})
