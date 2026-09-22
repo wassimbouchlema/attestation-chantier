@@ -24,6 +24,7 @@ load_dotenv(BASE_DIR / '.env')
 AI_COHERENCE_BACKEND = os.environ.get('AI_COHERENCE_BACKEND', 'simulation')
 MISTRAL_API_KEY = os.environ.get('MISTRAL_API_KEY', '')
 MISTRAL_MODEL = os.environ.get('MISTRAL_MODEL', 'mistral-medium-latest')
+MISTRAL_DOCUMENT_MODEL = os.environ.get('MISTRAL_DOCUMENT_MODEL', 'mistral-ocr-latest')
 
 # Défaut 'fake' : aucun appel réseau en développement/tests.
 DOCUMENT_EXTRACTION_BACKEND = os.environ.get('DOCUMENT_EXTRACTION_BACKEND', 'fake')

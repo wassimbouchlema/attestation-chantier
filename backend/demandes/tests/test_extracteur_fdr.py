@@ -66,11 +66,6 @@ class ObtenirExtracteurFdrTests(SimpleTestCase):
         extracteur = obtenir_extracteur_fdr()
         self.assertIsInstance(extracteur, FakeExtracteurFdr)
 
-    @override_settings(DOCUMENT_EXTRACTION_BACKEND="mistral")
-    def test_backend_mistral_non_implemente_echoue_explicitement(self):
-        with self.assertRaises(NotImplementedError):
-            obtenir_extracteur_fdr()
-
     @override_settings(DOCUMENT_EXTRACTION_BACKEND="azure-document-intelligence")
     def test_backend_inconnu_echoue_explicitement(self):
         with self.assertRaises(ValueError):
