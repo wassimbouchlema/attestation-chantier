@@ -13,7 +13,6 @@ export interface AttestationApi {
 }
 
 export interface ResultatCoherenceApi {
-  backend: "mistral" | "simulation";
   coherent: boolean;
   resume: string;
   anomalies: {

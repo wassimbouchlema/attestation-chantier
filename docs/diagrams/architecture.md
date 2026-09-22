@@ -18,7 +18,7 @@ flowchart TB
       RULES[Règles FDR / pièces / risque]
       DOCS[Génération PDF\nReportLab + xhtml2pdf]
       SAN[Bleach\nSanitization HTML]
-      AI[Contrôle de cohérence\nPydantic + Mistral/simulation]
+      AI[Contrôle de cohérence\nPydantic + règles déterministes]
       MAIL[Relance email]
     end
 

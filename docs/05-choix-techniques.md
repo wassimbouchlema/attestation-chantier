@@ -171,11 +171,9 @@ La réponse est contrainte par un modèle Pydantic strict :
 
 Cela rend la réponse exploitable par l'UI et réduit les ambiguïtés d'intégration.
 
-## 16. Simulation derrière le même contrat
+## 16. Moteur déterministe derrière un contrat stable
 
-`AI_COHERENCE_BACKEND=simulation` permet d'exécuter localement le parcours sans clé Mistral.
-
-Le même endpoint et une forme de réponse commune sont utilisés. Ce choix isole l'UI de l'implémentation du moteur.
+Le contrôle de cohérence est assuré par un moteur de règles déterministe (aucune clé ni appel externe requis), derrière un endpoint et une forme de réponse stables qui isolent l'UI de l'implémentation.
 
 ## 17. Azure abstrait par configuration
 

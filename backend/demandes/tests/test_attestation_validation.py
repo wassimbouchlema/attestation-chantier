@@ -191,7 +191,6 @@ class ValidationAttestationTests(APITestCase):
 
     def test_analyse_ia_n_influence_pas_la_decision(self):
         url = reverse("siege-demande-analyser-coherence-attestation", kwargs={"pk": self.demande.pk})
-        with override_settings(AI_COHERENCE_BACKEND="simulation"):
-            self.assertEqual(self.client.post(url).status_code, 200)
+        self.assertEqual(self.client.post(url).status_code, 200)
         self.verifier_non_valide()
         self.assertEqual(self.valider().status_code, 200)

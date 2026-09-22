@@ -157,20 +157,12 @@ La relance n'est persistée que si l'envoi SMTP réussit.
 
 ## 8. IA
 
-### Simulation locale
+Le contrôle de cohérence FDR/attestation est déterministe et ne nécessite aucune configuration IA.
+
+`MISTRAL_API_KEY` reste nécessaire pour l'extraction de document (préremplissage FDR) :
 
 ```env
-AI_COHERENCE_BACKEND=simulation
-```
-
-Aucune clé externe n'est nécessaire.
-
-### Mistral
-
-```env
-AI_COHERENCE_BACKEND=mistral
 MISTRAL_API_KEY=...
-MISTRAL_MODEL=mistral-medium-latest
 ```
 
 ## 9. Stockage fichier
@@ -256,9 +248,7 @@ Variables principales :
 | `DB_CONN_MAX_AGE` | pool de connexions Django |
 | `AZURE_STORAGE_*` | stockage de fichiers |
 | `EMAIL_*` | transport SMTP |
-| `AI_COHERENCE_BACKEND` | `simulation` ou `mistral` |
-| `MISTRAL_API_KEY` | clé IA |
-| `MISTRAL_MODEL` | modèle IA |
+| `MISTRAL_API_KEY` | clé IA (extraction de document uniquement) |
 | `SECURE_HSTS_SECONDS` | HSTS après validation HTTPS |
 | `LOG_LEVEL` | niveau de logs |
 

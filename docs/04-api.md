@@ -214,15 +214,12 @@ La validation finale peut renvoyer :
 - `409 ATTESTATION_VIDE`
 - `404` si l'attestation n'existe pas.
 
-L'analyse de cohérence peut renvoyer `503 IA_INDISPONIBLE`.
-
 ## 8. Réponse du contrôle de cohérence
 
 Forme :
 
 ```json
 {
-  "backend": "mistral",
   "coherent": false,
   "resume": "...",
   "anomalies": [

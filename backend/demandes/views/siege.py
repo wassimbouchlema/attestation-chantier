@@ -1,6 +1,5 @@
 import mimetypes
 
-from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.http import FileResponse, HttpResponse
@@ -14,7 +13,7 @@ from rest_framework.response import Response
 
 from comptes.permissions import IsSiege
 
-from ..analyse_coherence import IAIndisponible, analyser_coherence
+from ..analyse_coherence import analyser_coherence
 from ..evaluation_risque import calculer_evaluation_risque
 from ..html_sanitization import nettoyer_html
 from ..models import (
@@ -277,12 +276,10 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
                         child=serializers.DictField(),
                         help_text="Champs : type, champ, valeur_fdr, valeur_attestation, message.",
                     ),
-                    "backend": serializers.CharField(help_text="Moteur d'analyse utilisé."),
                 },
             ),
             404: OpenApiResponse(description="Demande introuvable ou attestation non préparée."),
             409: OpenApiResponse(description="DEMANDE_NON_TRAITABLE ou ATTESTATION_DEJA_VALIDEE."),
-            503: OpenApiResponse(description="IA_INDISPONIBLE : contrôle momentanément indisponible."),
         },
     )
     @action(detail=True, methods=["post"], url_path="attestation/analyser-coherence")
@@ -297,14 +294,8 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
                 {"code": "ATTESTATION_DEJA_VALIDEE", "detail": "Cette attestation est déjà validée."},
                 status=status.HTTP_409_CONFLICT,
             )
-        try:
-            resultat = analyser_coherence(demande.fdr, attestation)
-        except IAIndisponible:
-            return Response(
-                {"code": "IA_INDISPONIBLE", "detail": "Le contrôle de cohérence est indisponible. Réessayez plus tard."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        return Response({**resultat.model_dump(), "backend": settings.AI_COHERENCE_BACKEND})
+        resultat = analyser_coherence(demande.fdr, attestation)
+        return Response(resultat.model_dump())
 
     @extend_schema(
         tags=[TAG_SIEGE],
