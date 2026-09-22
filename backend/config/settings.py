@@ -25,6 +25,9 @@ AI_COHERENCE_BACKEND = os.environ.get('AI_COHERENCE_BACKEND', 'simulation')
 MISTRAL_API_KEY = os.environ.get('MISTRAL_API_KEY', '')
 MISTRAL_MODEL = os.environ.get('MISTRAL_MODEL', 'mistral-medium-latest')
 
+# Défaut 'fake' : aucun appel réseau en développement/tests.
+DOCUMENT_EXTRACTION_BACKEND = os.environ.get('DOCUMENT_EXTRACTION_BACKEND', 'fake')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
