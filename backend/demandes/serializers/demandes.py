@@ -1,9 +1,13 @@
+from pathlib import Path
+
 from rest_framework import serializers
 
 from ..evaluation_risque import NIVEAU_ELEVE, NIVEAU_FAIBLE, NIVEAU_MODERE
 from ..models import DecisionDemande, Demande, FormulaireRisque, TypeChantier, Usage
 from ..validators import valider_nom, valider_numero_contrat
 from .siege import DemandeComplementSerializer
+
+TYPE_MIME_PDF = "application/pdf"
 
 
 class DemandeSerializer(serializers.ModelSerializer):
@@ -158,3 +162,15 @@ class EvaluationRisqueSerializer(serializers.Serializer):
         choices=[NIVEAU_FAIBLE, NIVEAU_MODERE, NIVEAU_ELEVE], read_only=True
     )
     synthese = serializers.CharField(read_only=True)
+
+
+class ExtractionDocumentSerializer(serializers.Serializer):
+    document = serializers.FileField()
+
+    def validate_document(self, fichier):
+        if fichier.size == 0:
+            raise serializers.ValidationError("Le document est vide.")
+        extension = Path(fichier.name).suffix.lower()
+        if extension != ".pdf" or fichier.content_type != TYPE_MIME_PDF:
+            raise serializers.ValidationError("Seuls les documents PDF sont acceptés.")
+        return fichier

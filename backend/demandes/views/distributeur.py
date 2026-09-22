@@ -25,6 +25,7 @@ from comptes.permissions import IsDistributeur
 from comptes.services import ErreurConfigurationSiege, obtenir_compte_siege_unique
 
 from ..evaluation_risque import calculer_evaluation_risque
+from ..extracteur_fdr import DocumentAExtraire, ExtractionDocumentIndisponible, obtenir_extracteur_fdr
 from ..html_sanitization import nettoyer_html
 from ..models import (
     DecisionDemande,
@@ -57,6 +58,7 @@ from ..serializers import (
     DemandeSerializer,
     EnvoyerDemandeSerializer,
     EvaluationRisqueSerializer,
+    ExtractionDocumentSerializer,
     FormulaireRisqueSerializer,
     PieceJustificativeSerializer,
     ProjetAttestationSerializer,
@@ -191,6 +193,8 @@ class DemandeViewSet(
             return CommentaireDistributeurSerializer
         if self.action == "projet_attestation":
             return ProjetAttestationSerializer
+        if self.action == "extraire_document":
+            return ExtractionDocumentSerializer
         return DemandeSerializer
 
     @extend_schema(
@@ -228,6 +232,45 @@ class DemandeViewSet(
                 )
 
         return Response(DemandeDetailSerializer(demande).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=[TAG_FDR],
+        summary="Extraire un FDR depuis un document (préremplissage)",
+        description=(
+            "Rôle DISTRIBUTEUR. Upload multipart d'un document PDF unique. Extrait les informations "
+            "explicitement présentes dans le document pour proposer un préremplissage du FDR. Ne crée "
+            "et ne modifie aucune donnée : le résultat est à vérifier et compléter avant toute création "
+            "de demande via l'endpoint de création habituel."
+        ),
+        request=ExtractionDocumentSerializer,
+        responses={
+            200: OpenApiResponse(description="Résultat structuré de l'extraction (ResultatExtractionFdr)."),
+            400: OpenApiResponse(description="Document absent, vide, ou type non supporté (PDF uniquement)."),
+            503: OpenApiResponse(description="EXTRACTION_INDISPONIBLE : service d'extraction momentanément indisponible."),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="extraire-document")
+    def extraire_document(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        fichier = serializer.validated_data["document"]
+
+        document = DocumentAExtraire(
+            contenu=fichier.read(),
+            type_mime=fichier.content_type,
+            nom_fichier=fichier.name,
+        )
+        try:
+            resultat = obtenir_extracteur_fdr().extraire(document)
+        except ExtractionDocumentIndisponible:
+            return Response(
+                {
+                    "code": "EXTRACTION_INDISPONIBLE",
+                    "detail": "Le service d'extraction est indisponible. Réessayez plus tard.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(resultat.model_dump())
 
     @extend_schema(
         tags=[TAG_DEMANDES],
