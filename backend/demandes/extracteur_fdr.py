@@ -1,6 +1,7 @@
 """Abstraction du service d'extraction de données FDR depuis un document."""
 
 import base64
+import json
 from dataclasses import dataclass
 from typing import Protocol, get_args, runtime_checkable
 
@@ -68,6 +69,22 @@ d'incertitude, place le champ dans champs_non_trouves plutôt que de deviner.
 Renseigne confiance, page et extrait_source quand ils sont disponibles."""
 
 
+def _normaliser_champs_non_trouves(annotation: dict) -> dict:
+    """`champs_non_trouves` ne transporte aucune information que les 14
+    champs eux-mêmes ne portent pas déjà : `verifier_exhaustivite` impose une
+    bijection stricte entre "valeur non-null" et "absent de la liste". Plutôt
+    que de dépendre de Mistral pour maintenir ces deux représentations
+    cohérentes (source du rejet observé sur `chantier_ville`), on reconstruit
+    la liste ici à partir des valeurs réellement présentes. Une clé absente
+    du JSON est traitée comme `None`, exactement comme une clé présente à
+    `null`.
+    """
+    annotation["champs_non_trouves"] = [
+        champ for champ in get_args(ChampExtractibleFdr) if annotation.get(champ) is None
+    ]
+    return annotation
+
+
 class MistralExtracteurFdr:
     """Utilise l'API OCR de Mistral (`/v1/ocr`, `document_annotation_format`) :
     l'annotation de document entier est limitée par Mistral à quelques pages,
@@ -113,11 +130,20 @@ class MistralExtracteurFdr:
             raise ExtractionDocumentIndisponible("Réponse vide du fournisseur d'extraction.")
 
         try:
-            # model_validate_json (pas model_validate(json.loads(...))) : en
-            # mode strict, seule la validation depuis une chaîne JSON autorise
-            # la coercition ISO str -> date/Decimal, ces types n'existant pas
+            annotation = json.loads(reponse.document_annotation)
+        except json.JSONDecodeError as exc:
+            raise ExtractionDocumentIndisponible("Résultat d'extraction invalide.") from exc
+        if not isinstance(annotation, dict):
+            raise ExtractionDocumentIndisponible("Résultat d'extraction invalide.")
+
+        try:
+            # model_validate_json (pas model_validate(annotation)) : en mode
+            # strict, seule la validation depuis une chaîne JSON autorise la
+            # coercition ISO str -> date/Decimal, ces types n'existant pas
             # nativement en JSON.
-            return ResultatExtractionFdr.model_validate_json(reponse.document_annotation)
+            return ResultatExtractionFdr.model_validate_json(
+                json.dumps(_normaliser_champs_non_trouves(annotation))
+            )
         except ValidationError as exc:
             raise ExtractionDocumentIndisponible("Résultat d'extraction invalide.") from exc
 

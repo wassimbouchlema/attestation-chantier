@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from unittest.mock import patch
 
 import httpx
@@ -12,6 +13,9 @@ from ..extracteur_fdr import (
     MistralExtracteurFdr,
     obtenir_extracteur_fdr,
 )
+from ..extraction_fdr import ChampExtractibleFdr, get_args
+
+TOUS_LES_CHAMPS = list(get_args(ChampExtractibleFdr))
 
 PDF_FACTICE = b"%PDF-1.4 contenu factice"
 
@@ -77,6 +81,19 @@ class MistralExtracteurFdrTests(SimpleTestCase):
         self.assertFalse(requete["document_annotation_format"]["json_schema"]["schema"]["additionalProperties"])
         self.assertIn("document_annotation_prompt", requete)
 
+    def test_montants_exposes_a_mistral_comme_type_number_simple(self):
+        self.corps = _reponse_ocr(json.dumps({"champs_non_trouves": TOUS_LES_CHAMPS}))
+
+        self.extracteur.extraire(_document_pdf())
+
+        schema = self.requetes[0]["document_annotation_format"]["json_schema"]["schema"]
+        for champ in ("montant_total", "intervention_montant_prestation"):
+            with self.subTest(champ=champ):
+                ref = next(branche["$ref"] for branche in schema["properties"][champ]["anyOf"] if "$ref" in branche)
+                nom_def = ref.split("/")[-1]
+                schema_valeur = schema["$defs"][nom_def]["properties"]["valeur"]
+                self.assertEqual(schema_valeur, {"title": "Valeur", "type": "number"})
+
     def test_document_vide_rejete_sans_appel_reseau(self):
         with self.assertRaises(ValueError):
             self.extracteur.extraire(_document_pdf(contenu=b""))
@@ -104,6 +121,70 @@ class MistralExtracteurFdrTests(SimpleTestCase):
                 self.corps = _reponse_ocr(annotation)
                 with self.assertRaises(ExtractionDocumentIndisponible):
                     self.extracteur.extraire(_document_pdf())
+
+    def test_normalise_un_champ_null_oublie_dans_champs_non_trouves(self):
+        annotation = {
+            "assure_nom": {"valeur": "Jean Dupont", "confiance": 0.9},
+            "chantier_ville": None,
+            "champs_non_trouves": [c for c in TOUS_LES_CHAMPS if c not in ("assure_nom", "chantier_ville")],
+        }
+        self.corps = _reponse_ocr(json.dumps(annotation))
+
+        resultat = self.extracteur.extraire(_document_pdf())
+
+        self.assertIn("chantier_ville", resultat.champs_non_trouves)
+        self.assertIsNone(resultat.chantier_ville)
+        self.assertEqual(resultat.assure_nom.valeur, "Jean Dupont")
+
+    def test_normalise_un_champ_totalement_absent_du_json(self):
+        annotation = {"assure_nom": {"valeur": "Jean Dupont", "confiance": 0.9}}
+        self.corps = _reponse_ocr(json.dumps(annotation))
+
+        resultat = self.extracteur.extraire(_document_pdf())
+
+        self.assertIn("chantier_ville", resultat.champs_non_trouves)
+        self.assertIsNone(resultat.chantier_ville)
+        for champ in TOUS_LES_CHAMPS:
+            if champ != "assure_nom":
+                self.assertIn(champ, resultat.champs_non_trouves)
+
+    def test_normalise_un_champ_trouve_mais_liste_a_tort_dans_champs_non_trouves(self):
+        annotation = {
+            "montant_total": {"valeur": 500000.00, "confiance": 0.7},
+            "champs_non_trouves": TOUS_LES_CHAMPS,
+        }
+        self.corps = _reponse_ocr(json.dumps(annotation))
+
+        resultat = self.extracteur.extraire(_document_pdf())
+
+        self.assertNotIn("montant_total", resultat.champs_non_trouves)
+        self.assertEqual(resultat.montant_total.valeur, Decimal("500000.00"))
+
+    def test_normalise_plusieurs_champs_manquants_simultanement(self):
+        self.corps = _reponse_ocr(json.dumps({}))
+
+        resultat = self.extracteur.extraire(_document_pdf())
+
+        self.assertEqual(sorted(resultat.champs_non_trouves), sorted(TOUS_LES_CHAMPS))
+        for champ in TOUS_LES_CHAMPS:
+            self.assertIsNone(getattr(resultat, champ))
+
+    def test_normalisation_neutre_sur_un_resultat_deja_coherent(self):
+        annotation = {
+            "assure_nom": {"valeur": "Jean Dupont", "confiance": 0.9},
+            "montant_total": {"valeur": 500000.00, "confiance": 0.7},
+            "champs_non_trouves": [c for c in TOUS_LES_CHAMPS if c not in ("assure_nom", "montant_total")],
+        }
+        self.corps = _reponse_ocr(json.dumps(annotation))
+
+        resultat = self.extracteur.extraire(_document_pdf())
+
+        self.assertEqual(resultat.assure_nom.valeur, "Jean Dupont")
+        self.assertEqual(resultat.montant_total.valeur, Decimal("500000.00"))
+        self.assertEqual(
+            sorted(resultat.champs_non_trouves),
+            sorted(c for c in TOUS_LES_CHAMPS if c not in ("assure_nom", "montant_total")),
+        )
 
     def test_timeout(self):
         self.erreur_transport = httpx.ReadTimeout("secret-timeout")

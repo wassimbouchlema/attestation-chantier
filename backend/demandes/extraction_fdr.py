@@ -19,9 +19,9 @@ de laisser une ambiguïté entre « non cherché » et « cherché, absent ».
 
 from datetime import date
 from decimal import Decimal
-from typing import Generic, Literal, TypeVar, get_args
+from typing import Annotated, Generic, Literal, TypeVar, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
 from .models import TypeChantier, TypeIntervention, Usage
 
@@ -69,7 +69,14 @@ class ValeurExtraite(BaseModel, Generic[T]):
 
 ChampExtraitTexte = ValeurExtraite[str]
 ChampExtraitDate = ValeurExtraite[date]
-ChampExtraitMontant = ValeurExtraite[Decimal]
+
+# Le schéma JSON par défaut de Decimal (`anyOf[number, string au format
+# décimal]`) est rejeté par Mistral OCR (document_annotation_format, erreur
+# 3700 "Invalid structured output syntax") : forcer `{"type": "number"}`
+# côté schéma seulement, la validation Python continue de produire un
+# `Decimal` normalement.
+Montant = Annotated[Decimal, WithJsonSchema({"type": "number"})]
+ChampExtraitMontant = ValeurExtraite[Montant]
 ChampExtraitTypeChantier = ValeurExtraite[Literal[TypeChantier.NEUVE, TypeChantier.RENOVATION]]
 ChampExtraitUsage = ValeurExtraite[
     Literal[Usage.HABITATION, Usage.BUREAU, Usage.COMMERCE, Usage.AUTRE]

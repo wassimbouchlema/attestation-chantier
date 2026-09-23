@@ -180,6 +180,38 @@ class ResultatExtractionFdrTests(SimpleTestCase):
         self.assertEqual(resultat.champs_non_trouves, ["usage_autre_texte"])
         self.assertEqual(resultat.montant_total.valeur, Decimal("500000.00"))
 
+    def test_model_validate_json_avec_montants_numeriques_produit_des_decimal(self):
+        # Forme réaliste d'une réponse Mistral une fois le schéma corrigé :
+        # les montants sont des nombres JSON, pas des chaînes.
+        champs_null = [
+            c for c in TOUS_LES_CHAMPS if c not in ("montant_total", "intervention_montant_prestation")
+        ]
+        brut = json.dumps(
+            {champ: None for champ in champs_null}
+            | {
+                "montant_total": {"valeur": 500000.00, "confiance": 0.7},
+                "intervention_montant_prestation": {"valeur": 80000.5, "confiance": 0.6},
+                "champs_non_trouves": champs_null,
+            }
+        )
+
+        resultat = ResultatExtractionFdr.model_validate_json(brut)
+
+        self.assertIsInstance(resultat.montant_total.valeur, Decimal)
+        self.assertIsInstance(resultat.intervention_montant_prestation.valeur, Decimal)
+        self.assertEqual(resultat.montant_total.valeur, Decimal("500000.00"))
+        self.assertEqual(resultat.intervention_montant_prestation.valeur, Decimal("80000.5"))
+
+    def test_model_validate_json_accepte_un_resultat_entierement_absent(self):
+        # Forme que produirait un document_annotation Mistral n'ayant rien
+        # trouvé : chaque champ explicitement `null`, listé dans
+        # champs_non_trouves — jamais une valeur inventée.
+        brut = json.dumps({champ: None for champ in TOUS_LES_CHAMPS} | {"champs_non_trouves": TOUS_LES_CHAMPS})
+        resultat = ResultatExtractionFdr.model_validate_json(brut)
+        self.assertEqual(resultat.champs_non_trouves, TOUS_LES_CHAMPS)
+        for champ in TOUS_LES_CHAMPS:
+            self.assertIsNone(getattr(resultat, champ))
+
     def test_serialisation_json_round_trip(self):
         original = _resultat_vide(
             assure_nom=ChampExtraitTexte(valeur="Jean Dupont", confiance=0.9, page=2, extrait_source="Assuré : Jean Dupont"),
@@ -194,3 +226,31 @@ class ResultatExtractionFdrTests(SimpleTestCase):
         self.assertEqual(donnees["assure_nom"]["valeur"], "Jean Dupont")
         self.assertEqual(donnees["assure_nom"]["page"], 2)
         self.assertEqual(donnees["montant_total"]["valeur"], "500000.00")
+
+
+class MontantJsonSchemaTests(SimpleTestCase):
+    """Mistral OCR (document_annotation_format) rejette le schéma par défaut
+    de Decimal (`anyOf[number, string au format décimal]`, erreur 3700
+    "Invalid structured output syntax") : `montant_total` et
+    `intervention_montant_prestation` doivent exposer `{"type": "number"}`."""
+
+    def _schema_valeur(self, champ):
+        schema = ResultatExtractionFdr.model_json_schema()
+        ref = next(branche["$ref"] for branche in schema["properties"][champ]["anyOf"] if "$ref" in branche)
+        nom_def = ref.split("/")[-1]
+        return schema["$defs"][nom_def]["properties"]["valeur"]
+
+    def test_montant_total_expose_type_number_simple(self):
+        self.assertEqual(self._schema_valeur("montant_total"), {"title": "Valeur", "type": "number"})
+
+    def test_intervention_montant_prestation_expose_type_number_simple(self):
+        self.assertEqual(
+            self._schema_valeur("intervention_montant_prestation"), {"title": "Valeur", "type": "number"}
+        )
+
+    def test_montants_nont_plus_anyof_number_string(self):
+        for champ in ("montant_total", "intervention_montant_prestation"):
+            with self.subTest(champ=champ):
+                schema_valeur = self._schema_valeur(champ)
+                self.assertNotIn("anyOf", schema_valeur)
+                self.assertNotIn("pattern", schema_valeur)
