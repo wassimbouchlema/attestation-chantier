@@ -7,6 +7,10 @@ import { AssureSection } from "../../features/fdr/components/AssureSection/Assur
 import { ChantierSection } from "../../features/fdr/components/ChantierSection/ChantierSection";
 import { FdrStepper } from "../../features/fdr/components/FdrStepper/FdrStepper";
 import { InterventionSection } from "../../features/fdr/components/InterventionSection/InterventionSection";
+import {
+  PreremplissageDocumentApercu,
+  PreremplissageDocumentUpload,
+} from "../../features/fdr/components/PreremplissageDocumentSection/PreremplissageDocumentSection";
 import { QuestionsMetierSection } from "../../features/fdr/components/QuestionsMetierSection/QuestionsMetierSection";
 import { UsageCalendrierSection } from "../../features/fdr/components/UsageCalendrierSection/UsageCalendrierSection";
 import { PageHeader } from "../../layout/PageHeader";
@@ -15,6 +19,7 @@ import { useFdrNouvelleDemandePage } from "./useFdrNouvelleDemandePage";
 export const FdrNouvelleDemandePage = () => {
   const {
     methods,
+    preremplissage,
     etatDe,
     modifierSection,
     validerSection,
@@ -46,23 +51,26 @@ export const FdrNouvelleDemandePage = () => {
         title="Nouvelle demande d'attestation"
         actions={<Link to="/distributeur">Retour à mes demandes</Link>}
       />
-      <div className="af-container">
-        <FdrStepper />
-      </div>
-      <MainContainer>
-        <div className="container-fluid app-shell__content">
-          {messageGlobal && (
-            <div ref={messageGlobalRef} tabIndex={-1}>
-              <Message
-                title={messageGlobal}
-                variant="error"
-                onClose={fermerMessageGlobal}
-                closeButtonAriaLabel="Fermer"
-              />
-            </div>
-          )}
+      <FormProvider {...methods}>
+        <div className="af-container">
+          <PreremplissageDocumentUpload page={preremplissage} />
+          <FdrStepper />
+        </div>
+        <MainContainer>
+          <div className="container-fluid app-shell__content">
+            {messageGlobal && (
+              <div ref={messageGlobalRef} tabIndex={-1}>
+                <Message
+                  title={messageGlobal}
+                  variant="error"
+                  onClose={fermerMessageGlobal}
+                  closeButtonAriaLabel="Fermer"
+                />
+              </div>
+            )}
 
-          <FormProvider {...methods}>
+            <PreremplissageDocumentApercu page={preremplissage} />
+
             <MandatoryMention variant="one" />
 
             <AssureSection
@@ -104,9 +112,9 @@ export const FdrNouvelleDemandePage = () => {
                 {confirmationEnCours ? "Confirmation…" : "Confirmer les informations"}
               </Button>
             </div>
-          </FormProvider>
-        </div>
-      </MainContainer>
+          </div>
+        </MainContainer>
+      </FormProvider>
     </>
   );
 };

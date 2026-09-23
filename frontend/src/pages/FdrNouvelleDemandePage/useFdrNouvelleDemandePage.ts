@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ErreurFdrInvalide } from "../../api/demandes";
 import { messageErreurAffichable } from "../../features/demandes/helpers/messageErreur";
 import { useCreerDemandeAvecFdr } from "../../features/demandes/queries";
+import { usePreremplissageDocumentSection } from "../../features/fdr/components/PreremplissageDocumentSection/usePreremplissageDocumentSection";
 import { useFdrSectionsEtat } from "../../features/fdr/hooks/useFdrSectionsEtat";
 import { fdrInformationsSchema } from "../../features/fdr/schemas/fdrInformationsSchema";
 import { FDR_FORM_VALEURS_VIDES, type FdrFormValues } from "../../features/fdr/types/FdrFormValues";
@@ -27,6 +28,8 @@ export const useFdrNouvelleDemandePage = () => {
   const { etatDe, modifierSection, validerSection, erreurValidationGlobale, fermerErreurValidationGlobale, verifierEtValider } =
     useFdrSectionsEtat({ identifiant: IDENTIFIANT_NOUVELLE_DEMANDE, lectureSeule: false, methods });
 
+  const preremplissage = usePreremplissageDocumentSection(methods, validerSection);
+
   const confirmerInformations = () =>
     verifierEtValider(() => {
       creerDemandeMutation.mutate(versPayloadApi(methods.getValues()), {
@@ -36,6 +39,7 @@ export const useFdrNouvelleDemandePage = () => {
 
   return {
     methods,
+    preremplissage,
     etatDe,
     modifierSection,
     validerSection,
