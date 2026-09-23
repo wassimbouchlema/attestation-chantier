@@ -1,0 +1,81 @@
+.preremplissage-document__aide {
+  color: var(--gray60);
+  margin: 0 0 1rem;
+}
+
+.preremplissage-document-apercu__entete {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.preremplissage-document-apercu__entete h2 {
+  margin: 0;
+}
+
+.preremplissage-document-apercu__entete p {
+  color: var(--gray60);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.preremplissage-document__grille {
+  display: grid;
+  gap: 0.75rem 2rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .preremplissage-document__grille {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.preremplissage-document__champ {
+  border-bottom: 0.0625rem solid var(--gray40);
+  padding-bottom: 0.5rem;
+}
+
+.preremplissage-document__label {
+  color: var(--gray60);
+  display: block;
+  font-size: 0.8125rem;
+}
+
+.preremplissage-document__ligne {
+  align-items: baseline;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.preremplissage-document__valeur {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preremplissage-document__confiance {
+  color: var(--gray60);
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
+
+.preremplissage-document__source {
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+}
+
+.preremplissage-document__source summary {
+  color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.preremplissage-document__actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}

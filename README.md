@@ -15,7 +15,7 @@ Le parcours couvre la saisie côté distributeur, la détection automatique des 
 - consultation, refus ou demande de compléments côté SIÈGE ;
 - génération et édition WYSIWYG d'un projet d'attestation côté distributeur ;
 - préparation, prévisualisation et validation d'une attestation définitive côté SIÈGE ;
-- contrôle de cohérence entre FDR et attestation via Mistral ou un backend de simulation ;
+- contrôle de cohérence déterministe entre FDR et attestation ;
 - notifications applicatives, relance email avec délai de 24 h et reporting synthétique.
 
 ## Parcours métier

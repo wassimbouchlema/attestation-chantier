@@ -4,6 +4,7 @@ from .demandes import (
     DemandeSerializer,
     EnvoyerDemandeSerializer,
     EvaluationRisqueSerializer,
+    ExtractionDocumentSerializer,
     FormulaireRisqueSerializer,
 )
 from .notifications import MarquerNotificationsVuesSerializer, NotificationSerializer
@@ -23,6 +24,7 @@ __all__ = [
     "DemanderComplementsSerializer",
     "EnvoyerDemandeSerializer",
     "EvaluationRisqueSerializer",
+    "ExtractionDocumentSerializer",
     "FormulaireRisqueSerializer",
     "MarquerNotificationsVuesSerializer",
     "NotificationSerializer",

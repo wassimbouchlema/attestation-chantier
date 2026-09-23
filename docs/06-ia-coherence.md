@@ -1,4 +1,4 @@
-# 06 — IA et contrôle de cohérence
+# 06 — Contrôle de cohérence FDR / attestation
 
 ## 1. Rôle du contrôle
 
@@ -32,16 +32,7 @@ Préconditions :
 - attestation existante ;
 - attestation non validée.
 
-En cas d'indisponibilité du moteur :
-
-```json
-{
-  "code": "IA_INDISPONIBLE",
-  "detail": "Le contrôle de cohérence est indisponible. Réessayez plus tard."
-}
-```
-
-avec statut `503`.
+Le moteur étant déterministe et local (aucun appel réseau), il n'existe plus de cas d'indisponibilité du contrôle lui-même : seules les préconditions ci-dessus peuvent produire une erreur (`404`, `409`).
 
 ## 3. Contrat de sortie
 
@@ -67,7 +58,7 @@ Types :
 
 - `VALEUR_DIFFERENTE`
 - `INFORMATION_ABSENTE`
-- `CONTRADICTION`
+- `CONTRADICTION` (défini par le schéma, jamais produit par le moteur actuel — voir §6)
 
 Invariant validé par Pydantic :
 
@@ -75,9 +66,9 @@ Invariant validé par Pydantic :
 coherent == (anomalies est vide)
 ```
 
-## 4. Champs FDR adressables
+## 4. Champs comparés
 
-`champ` ne peut prendre qu'un identifiant sémantique parmi les 19 champs FDR définis par `ChampFdr` :
+`champ` ne peut prendre qu'un identifiant sémantique parmi les 12 champs FDR définis par `ChampFdr` — ceux que `generer_contenu_initial()` écrit réellement dans le corps de l'attestation :
 
 - `assure_nom`
 - `assure_ville`
@@ -85,86 +76,63 @@ coherent == (anomalies est vide)
 - `chantier_nom`
 - `chantier_ville`
 - `type_chantier`
-- `chantier_atypique`
-- `modification_structure`
-- `usage`
-- `usage_autre_texte`
 - `date_debut`
 - `date_fin`
 - `montant_total`
 - `intervention_description`
 - `intervention_montant_prestation`
 - `intervention_type`
-- `activite_couverte`
-- `activite_non_couverte_texte`
-- `travaux_standards`
 
-Le backend rejette également un résultat qui signalerait un champ non présent dans l'entrée réellement transmise.
+Les questions métier tri-state (`chantier_atypique`, `modification_structure`, `activite_couverte`, `travaux_standards`, `usage`, `usage_autre_texte`, `activite_non_couverte_texte`) ne font pas partie de `ChampFdr` : elles ne sont jamais rendues dans l'attestation, les comparer produirait systématiquement `INFORMATION_ABSENTE`.
+
+Sur ces 12 champs, **11 sont effectivement comparés** par le moteur. `intervention_description` est volontairement exclu de la comparaison : sa localisation dans le texte est déterministe (délimitée par deux repères fixes), mais c'est un champ de prose libre multi-lignes — une comparaison d'égalité stricte transformerait toute reformulation légitime du SIÈGE en fausse anomalie `VALEUR_DIFFERENTE`.
 
 ## 5. Construction de l'entrée
 
 Le backend :
 
 1. sélectionne les champs FDR renseignés ;
-2. ignore les sous-champs conditionnels lorsqu'ils ne s'appliquent pas ;
-3. transforme les choix enum en libellés ;
-4. sérialise dates et décimaux ;
-5. nettoie le HTML de l'attestation ;
-6. extrait uniquement son texte lisible ;
-7. envoie au moteur un JSON contenant `fdr` et `attestation`.
+2. transforme les choix enum en libellés (`type_chantier`, `intervention_type`) ;
+3. sérialise dates et décimaux ;
+4. nettoie le HTML de l'attestation (`bleach`) ;
+5. extrait uniquement son texte lisible ;
+6. construit un dict Python `{"fdr": ..., "attestation": ...}` transmis directement, en mémoire, au moteur — aucune sérialisation JSON, aucun appel réseau.
 
-Le HTML brut n'est donc pas envoyé tel quel au modèle.
+## 6. Le moteur par règles (`_analyser_par_regles`)
 
-## 6. Défense contre les instructions présentes dans les documents
+Pour chacun des 11 champs comparés, le moteur :
 
-Le prompt système précise que le FDR et l'attestation sont des **données non fiables** et que toute instruction qu'ils pourraient contenir doit être ignorée.
+1. recherche dans le texte de l'attestation un motif ancré sur le repère textuel fixe que produit `generer_contenu_initial()` (ex. « Montant total du chantier : », le titre `CHANTIER`) ;
+2. normalise la valeur trouvée et la valeur FDR avant comparaison ;
+3. compare les deux valeurs normalisées.
 
-Le modèle reçoit également les consignes suivantes :
+Normalisations utilisées :
 
-- comparer uniquement les faits présents ;
-- ne pas inventer d'information ;
-- ne pas recommander acceptation ou refus ;
-- ne produire aucune prose hors du schéma demandé.
+- **texte** (noms, villes, libellés d'enum) : suppression des accents, mise en minuscule, espaces multiples réduits à un seul, ponctuation finale ignorée ;
+- **date** : conversion du format `jj/mm/aaaa` trouvé dans le texte vers le format ISO `aaaa-mm-jj` du FDR ;
+- **montant** : suppression des espaces (y compris insécables), virgule convertie en point décimal, comparaison via `Decimal`.
 
-Il s'agit d'une mesure de réduction du risque de prompt injection documentaire, complétée par une sortie structurée et validée côté serveur.
+Résultat : `VALEUR_DIFFERENTE` si le motif est trouvé mais diffère après normalisation, `INFORMATION_ABSENTE` si le motif n'est pas trouvé du tout.
 
-## 7. Backend Mistral
+Deux paires de champs (`assure_nom`/`assure_ville`, `chantier_nom`/`chantier_ville`) se distinguent par position plutôt que par libellé propre. Leurs motifs exigent la présence des deux lignes **et** du repère qui suit : si l'une des deux lignes est absente (ex. suppression manuelle dans l'éditeur), les deux champs de la paire échouent ensemble en `INFORMATION_ABSENTE`, plutôt que d'attribuer une ligne au mauvais champ.
 
-Configuration :
+## 7. Pourquoi une approche déterministe
 
-```env
-AI_COHERENCE_BACKEND=mistral
-MISTRAL_API_KEY=...
-MISTRAL_MODEL=mistral-medium-latest
-```
+- **Reproductibilité** : une même paire FDR/attestation produit toujours le même résultat, ce qui n'était pas garanti avec un modèle de langage (observé notamment sur des valeurs strictement identiques signalées à tort comme différentes).
+- **Aucune dépendance externe** ni latence réseau pour une fonctionnalité de contrôle interne.
+- **Testabilité** : chaque règle est une expression régulière et une fonction de normalisation, vérifiables unitairement de façon exhaustive.
 
-L'appel utilise :
+## 8. Ce qui a été retiré
 
-- `temperature=0` ;
-- `response_format=ResultatCoherence` ;
-- timeout de 30 secondes ;
-- validation Pydantic après réception.
+La cohérence FDR/attestation n'utilise plus :
 
-Toute exception du SDK est masquée derrière `IAIndisponible` afin de ne pas remonter au client des détails qui pourraient contenir des en-têtes ou du contenu documentaire.
+- le setting `AI_COHERENCE_BACKEND` ;
+- le setting `MISTRAL_MODEL` ;
+- l'appel `client.chat.parse()` ;
+- un prompt système destiné à un LLM ;
+- tout mécanisme de fallback entre plusieurs moteurs.
 
-## 8. Backend de simulation
-
-Configuration :
-
-```env
-AI_COHERENCE_BACKEND=simulation
-```
-
-La simulation applique des extractions déterministes au texte de l'attestation et compare actuellement un sous-ensemble de champs :
-
-- assuré ;
-- numéro de contrat ;
-- chantier ;
-- dates ;
-- montants ;
-- type d'intervention.
-
-Elle permet de démontrer le contrat UI/API sans dépendance réseau, mais elle n'a pas la couverture sémantique du backend Mistral.
+`MISTRAL_API_KEY` et `MISTRAL_DOCUMENT_MODEL` restent nécessaires, mais pour une fonctionnalité distincte : l'extraction de document / préremplissage FDR (`MistralExtracteurFdr`), qui continue d'utiliser l'OCR Mistral pour transformer un document externe non structuré en données structurées — un besoin different de la comparaison FDR/attestation, où les deux côtés sont déjà connus du backend.
 
 ## 9. Place dans la décision
 
@@ -176,7 +144,11 @@ Aucune condition dans `valider_attestation` n'exige :
 
 La validation finale vérifie les invariants techniques et métier de l'attestation puis laisse le SIÈGE prendre la décision.
 
-## 10. Évolution : localisation contextuelle des incohérences
+## 10. Évolution de l'architecture
+
+Une approche par LLM (Mistral) a été expérimentée pour cette fonctionnalité avant d'être remplacée par le moteur par règles actuel, afin d'obtenir des résultats reproductibles sur une comparaison où les deux côtés (FDR structuré, texte généré par un gabarit fixe) sont déjà connus du backend.
+
+## 11. Évolution possible : localisation contextuelle des incohérences
 
 Une évolution possible serait d'associer chaque anomalie à la zone correspondante de l'éditeur afin de guider visuellement le gestionnaire vers l'information à vérifier.
 

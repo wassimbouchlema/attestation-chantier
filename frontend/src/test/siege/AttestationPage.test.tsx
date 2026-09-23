@@ -79,7 +79,7 @@ beforeEach(() => {
     headers: { "Content-Type": "application/pdf" },
   }));
   analyser = vi.fn(() => HttpResponse.json({
-    backend: "simulation", coherent: true,
+    coherent: true,
     resume: "Aucune incohérence détectée entre le FDR et l'attestation enregistrée.", anomalies: [],
   } satisfies ResultatCoherenceApi));
   server.use(
@@ -119,7 +119,7 @@ describe("Éditeur SIÈGE", () => {
     expect(within(feuille).queryByText("Validation définitive : réservée au siège.")).not.toBeInTheDocument();
     expect(within(feuille).queryByText("Alice Martin")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Accepter|Refuser/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeEnabled();
     expect(screen.queryByText(/Enregistrez vos modifications/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeEnabled();
     expect(genererPdf).not.toHaveBeenCalled();
@@ -134,9 +134,9 @@ describe("Éditeur SIÈGE", () => {
     expect(screen.getByText("Enregistrez vos modifications avant de générer la prévisualisation.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Télécharger la prévisualisation" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeDisabled();
     expect(screen.getByText("Enregistrez vos modifications avant de lancer le contrôle.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(analyser).not.toHaveBeenCalled();
     expect(sauvegarder).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Prévisualiser" }));
@@ -149,7 +149,7 @@ describe("Éditeur SIÈGE", () => {
     expect(screen.queryByText(/Enregistrez vos modifications/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Télécharger la prévisualisation" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Prévisualiser" }));
     await waitFor(() => expect(ouverture).toHaveBeenCalledWith("blob:attestation", "_blank"));
     await user.click(screen.getByRole("button", { name: "Télécharger la prévisualisation" }));
@@ -166,7 +166,7 @@ describe("Éditeur SIÈGE", () => {
     await screen.findByText("Impossible d'enregistrer l'attestation.");
     expect(await attendreEditeur()).toHaveTextContent("À conserver.");
     expect(screen.getByRole("button", { name: "Prévisualiser" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeDisabled();
   });
 
   it("revient au détail de la demande", async () => {
@@ -195,19 +195,18 @@ describe("Contrôle de cohérence SIÈGE", () => {
     const user = userEvent.setup();
     renderPage();
     await attendreEditeur();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(screen.getByRole("button", { name: "Analyse en cours…" })).toBeDisabled();
     expect(await screen.findByText("Cohérent")).toBeInTheDocument();
     expect(screen.getByText("Aucune incohérence détectée entre le FDR et l'attestation enregistrée.")).toBeInTheDocument();
-    expect(screen.getByText("Analyse simulée")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Accepter|Refuser/ })).not.toBeInTheDocument();
     expect(sauvegarder).not.toHaveBeenCalled();
     expect(analyser).toHaveBeenCalledTimes(1);
   });
 
-  it("restitue les anomalies et indique explicitement une simulation", async () => {
+  it("restitue les anomalies du contrôle de cohérence", async () => {
     analyser.mockImplementation(() => HttpResponse.json({
-      backend: "simulation", coherent: false, resume: "Deux écarts factuels détectés.",
+      coherent: false, resume: "Deux écarts factuels détectés.",
       anomalies: [
         { type: "VALEUR_DIFFERENTE", champ: "montant_total", valeur_fdr: "12000000.00",
           valeur_attestation: "1200000.00", message: "Le montant total diffère." },
@@ -218,10 +217,10 @@ describe("Contrôle de cohérence SIÈGE", () => {
     const user = userEvent.setup();
     renderPage();
     await attendreEditeur();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(await screen.findByText("Incohérences détectées")).toBeInTheDocument();
     const resultat = screen.getByRole("region", { name: "Résultat du contrôle de cohérence" });
-    for (const texte of ["Analyse simulée", "Montant total du chantier", "12 000 000,00 €", "1 200 000,00 €",
+    for (const texte of ["Montant total du chantier", "12 000 000,00 €", "1 200 000,00 €",
       "Le montant total diffère.", "Date de fin", "2027-06-30", "Information absente", "La date de fin est absente."]) {
       expect(within(resultat).getByText(texte)).toBeInTheDocument();
     }
@@ -229,20 +228,19 @@ describe("Contrôle de cohérence SIÈGE", () => {
     expect(within(resultat).getAllByText("Valeur attestation")).toHaveLength(2);
   });
 
-  it("affiche l'erreur IA sans ancien résultat puis autorise une nouvelle tentative", async () => {
+  it("affiche l'erreur du contrôle de cohérence sans ancien résultat puis autorise une nouvelle tentative", async () => {
     const user = userEvent.setup();
     renderPage();
     await attendreEditeur();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     await screen.findByText("Cohérent");
     analyser.mockImplementationOnce(() => HttpResponse.json({
       code: "IA_INDISPONIBLE", detail: "Le contrôle de cohérence est indisponible. Réessayez plus tard.",
     }, { status: 503 }));
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(await screen.findByText("Le contrôle de cohérence est indisponible. Réessayez plus tard.")).toBeInTheDocument();
     expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
-    expect(screen.queryByText("Analyse simulée")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(await screen.findByText("Cohérent")).toBeInTheDocument();
     expect(analyser).toHaveBeenCalledTimes(3);
   });
@@ -251,15 +249,15 @@ describe("Contrôle de cohérence SIÈGE", () => {
     const user = userEvent.setup();
     renderPage();
     const editeur = await attendreEditeur();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     await screen.findByText("Cohérent");
     await user.type(editeur, "Correction.");
     expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await screen.findByText("Attestation enregistrée.");
     expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     expect(await screen.findByText("Cohérent")).toBeInTheDocument();
     expect(analyser).toHaveBeenCalledTimes(2);
   });
@@ -274,12 +272,12 @@ describe("Contrôle de cohérence SIÈGE", () => {
     const user = userEvent.setup();
     renderPage();
     const editeur = await attendreEditeur();
-    await user.click(screen.getByRole("button", { name: "Analyser avec IA" }));
+    await user.click(screen.getByRole("button", { name: "Analyser la cohérence" }));
     await user.type(editeur, "Nouvelle version.");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await screen.findByText("Attestation enregistrée.");
     terminer();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Analyser avec IA" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Analyser la cohérence" })).toBeEnabled());
     expect(screen.queryByText("Cohérent")).not.toBeInTheDocument();
     expect(analyser).toHaveBeenCalledTimes(1);
   });
@@ -327,7 +325,7 @@ describe("Préparation depuis le détail SIÈGE", () => {
 describe("Validation et acceptation SIÈGE", () => {
   const demandeTraitee: DemandeDetail = { ...demande, statut: "TRAITE", decision: "ACCEPTEE" };
 
-  it("désactive la validation tant que le contenu n'est pas enregistré, sans exiger l'analyse IA", async () => {
+  it("désactive la validation tant que le contenu n'est pas enregistré, sans exiger le contrôle de cohérence", async () => {
     const user = userEvent.setup();
     renderPage();
     const editeur = await attendreEditeur();
@@ -392,7 +390,7 @@ describe("Parcours d'actions SIÈGE", () => {
       "Télécharger la prévisualisation",
     ]);
 
-    const analyser = screen.getByRole("button", { name: "Analyser avec IA" });
+    const analyser = screen.getByRole("button", { name: "Analyser la cohérence" });
     const titre = screen.getByRole("heading", { name: "Contrôle de cohérence" });
     expect(titre.closest(".surface")).toContainElement(analyser);
 
@@ -408,7 +406,7 @@ describe("Parcours d'actions SIÈGE", () => {
     expect(titre.compareDocumentPosition(valider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("Valider et accepter reste disponible sans analyse IA", async () => {
+  it("Valider et accepter reste disponible sans contrôle de cohérence", async () => {
     renderPage();
     await attendreEditeur();
     expect(screen.getByRole("button", { name: "Valider et accepter" })).toBeEnabled();

@@ -59,7 +59,7 @@ export const AttestationPage = () => {
                   <div className="attestation-coherence__entete">
                     <h2 id="titre-coherence">Contrôle de cohérence</h2>
                     <Button variant="secondary" onClick={page.analyser} disabled={page.analyseDisabled}>
-                      {page.analyseEnCours ? "Analyse en cours…" : "Analyser avec IA"}
+                      {page.analyseEnCours ? "Analyse en cours…" : "Analyser la cohérence"}
                     </Button>
                   </div>
                   {page.dirty && <p className="attestation-coherence__aide">Enregistrez vos modifications avant de lancer le contrôle.</p>}

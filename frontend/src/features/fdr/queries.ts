@@ -8,6 +8,7 @@ import {
   type FormulaireRisqueApi,
 } from "../../api/demandes";
 import { recupererEvaluationRisque } from "../../api/evaluationRisque";
+import { extraireDocumentFdr } from "../../api/extraction";
 import { recupererPieces, supprimerPiece, uploaderPiece, type CategoriePiece } from "../../api/pieces";
 import { demandesKeys } from "../demandes/queries";
 
@@ -64,6 +65,13 @@ export const useSupprimerPiece = (demandeId: string) => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: piecesKeys.deDemande(demandeId) });
     },
+  });
+};
+
+/** Aucune invalidation : l'extraction ne crée/modifie rien côté serveur, rien à resynchroniser. */
+export const useExtraireDocumentFdr = () => {
+  return useMutation({
+    mutationFn: (fichier: File) => extraireDocumentFdr(fichier),
   });
 };
 

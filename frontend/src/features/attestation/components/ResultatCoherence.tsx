@@ -32,7 +32,6 @@ export const ResultatCoherence = ({ resultat }: { resultat: ResultatCoherenceApi
       <Tag variant={resultat.coherent ? "success" : "warning"}>
         {resultat.coherent ? "Cohérent" : "Incohérences détectées"}
       </Tag>
-      {resultat.backend === "simulation" && <span className="resultat-coherence__origine">Analyse simulée</span>}
     </div>
     <p className="resultat-coherence__resume">{resultat.resume}</p>
     {resultat.anomalies.map((anomalie, index) => (
