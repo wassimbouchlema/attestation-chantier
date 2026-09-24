@@ -1,12 +1,12 @@
 from datetime import timedelta
 
-from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Exists, OuterRef
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -37,10 +37,9 @@ from ..models import (
     StatutDemande,
     TypeNotification,
 )
-from ..pdf import generer_pdf_fdr
 from ..projet_attestation import generer_contenu_initial
 from ..projet_attestation_pdf import generer_pdf
-from ..rules import calculer_pieces_manquantes, calculer_pieces_requises
+from ..rules import est_demande_modifiable
 from ..schema_docs import (
     DEMANDE_INTROUVABLE,
     DEMANDE_NON_MODIFIABLE,
@@ -62,13 +61,16 @@ from ..serializers import (
     PieceJustificativeSerializer,
     ProjetAttestationSerializer,
 )
+from ..services.demandes.envoi import (
+    DemandeNonModifiable,
+    DossierIncomplet,
+    FdrInvalide,
+    envoyer_demande,
+)
 from ..services.pieces import etat_dossier_pieces
 from ..validation_envoi import valider_fdr_pret_a_envoyer
 from .pagination import DemandePagination
 from .telechargements import reponse_fdr_pdf
-
-TITRE_DEMANDE_ENVOYEE = "Nouvelle demande reçue"
-MESSAGE_DEMANDE_ENVOYEE = "Une nouvelle demande d'attestation de chantier a été envoyée."
 
 TITRE_RELANCE = "Demande relancée"
 MESSAGE_RELANCE = "Le distributeur a relancé une demande en cours de traitement."
@@ -196,7 +198,7 @@ class DemandeViewSet(
         return DemandeSerializer
 
     def _refuser_hors_brouillon(self, demande):
-        if demande.statut != StatutDemande.BROUILLON:
+        if not est_demande_modifiable(demande):
             return Response(
                 {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
                 status=status.HTTP_409_CONFLICT,
@@ -451,63 +453,35 @@ class DemandeViewSet(
         entree = EnvoyerDemandeSerializer(data=request.data)
         entree.is_valid(raise_exception=True)
 
-        with transaction.atomic():
-            demande = get_object_or_404(
-                Demande.objects.select_for_update().filter(distributeur=request.user),
-                pk=pk,
+        try:
+            demande = envoyer_demande(
+                pk,
+                request.user,
+                commentaire_distributeur=entree.validated_data.get("commentaire_distributeur"),
             )
-
-            conflit = self._refuser_hors_brouillon(demande)
-            if conflit is not None:
-                return conflit
-
-            erreurs_fdr = valider_fdr_pret_a_envoyer(demande.fdr)
-            if erreurs_fdr:
-                return Response(
-                    {"code": "FDR_INVALIDE", "erreurs": erreurs_fdr}, status=status.HTTP_400_BAD_REQUEST
-                )
-
-            pieces_requises = calculer_pieces_requises(demande.fdr)
-            pieces_presentes = {piece.type_piece for piece in demande.pieces.all()}
-            pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
-            if pieces_manquantes:
-                return Response(
-                    {"code": "DOSSIER_INCOMPLET", "pieces_manquantes": pieces_manquantes},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            try:
-                siege = obtenir_compte_siege_unique()
-            except ErreurConfigurationSiege:
-                return Response(
-                    {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-            if "commentaire_distributeur" in entree.validated_data:
-                demande.commentaire_distributeur = entree.validated_data["commentaire_distributeur"]
-            commentaire_final = demande.commentaire_distributeur
-
-            envoye_at = timezone.now()
-            pdf_bytes = generer_pdf_fdr(demande, envoye_at=envoye_at, commentaire_distributeur=commentaire_final)
-
-            try:
-                demande.fdr_pdf.save(f"{demande.id}.pdf", ContentFile(pdf_bytes), save=False)
-                demande.statut = StatutDemande.EN_COURS
-                demande.envoye_at = envoye_at
-                demande.save()
-                Notification.objects.create(
-                    destinataire=siege,
-                    demande=demande,
-                    type_notification=TypeNotification.DEMANDE_ENVOYEE,
-                    titre=TITRE_DEMANDE_ENVOYEE,
-                    message=MESSAGE_DEMANDE_ENVOYEE,
-                )
-            except Exception:
-                # La transaction protège la base, pas le fichier créé pendant la tentative.
-                if demande.fdr_pdf:
-                    demande.fdr_pdf.delete(save=False)
-                raise
+        except Demande.DoesNotExist:
+            # Reproduit le message (traduit) de get_object_or_404, que DRF réinjecte
+            # tel quel dans le payload 404 : un `raise Http404` nu changerait ce payload.
+            raise Http404(_("No %s matches the given query.") % Demande._meta.object_name)
+        except DemandeNonModifiable:
+            return Response(
+                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except FdrInvalide as exc:
+            return Response(
+                {"code": "FDR_INVALIDE", "erreurs": exc.erreurs}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except DossierIncomplet as exc:
+            return Response(
+                {"code": "DOSSIER_INCOMPLET", "pieces_manquantes": exc.pieces_manquantes},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except ErreurConfigurationSiege:
+            return Response(
+                {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         return Response(DemandeDetailSerializer(demande).data, status=status.HTTP_200_OK)
 
@@ -744,7 +718,7 @@ class PieceJustificativeViewSet(viewsets.GenericViewSet):
         )
 
     def _refuser_hors_brouillon(self, demande):
-        if demande.statut != StatutDemande.BROUILLON:
+        if not est_demande_modifiable(demande):
             return Response(
                 {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
                 status=status.HTTP_409_CONFLICT,

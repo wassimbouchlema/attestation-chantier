@@ -10,7 +10,7 @@ instance non sauvegardée en test.
 
 from decimal import Decimal
 
-from .models import FormulaireRisque, TypeChantier, Usage
+from .models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
 
 PIECE_STRUCTURE = "structure"
 PIECE_USAGE = "usage"
@@ -66,3 +66,7 @@ def calculer_pieces_manquantes(pieces_requises: list[str], pieces_presentes) -> 
     (déjà ordonné par `calculer_pieces_requises`).
     """
     return [piece for piece in pieces_requises if piece not in pieces_presentes]
+
+
+def est_demande_modifiable(demande: Demande) -> bool:
+    return demande.statut == StatutDemande.BROUILLON

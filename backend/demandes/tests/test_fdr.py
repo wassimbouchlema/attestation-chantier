@@ -18,6 +18,7 @@ from ..rules import (
     PIECE_TRAVAUX,
     PIECE_USAGE,
     calculer_pieces_requises,
+    est_demande_modifiable,
 )
 
 
@@ -540,3 +541,14 @@ class CalculerPiecesRequisesTests(SimpleTestCase):
                 PIECE_TRAVAUX,
             ],
         )
+
+
+class EstDemandeModifiableTests(SimpleTestCase):
+    def test_brouillon_est_modifiable(self):
+        self.assertTrue(est_demande_modifiable(Demande(statut=StatutDemande.BROUILLON)))
+
+    def test_en_cours_nest_pas_modifiable(self):
+        self.assertFalse(est_demande_modifiable(Demande(statut=StatutDemande.EN_COURS)))
+
+    def test_traite_nest_pas_modifiable(self):
+        self.assertFalse(est_demande_modifiable(Demande(statut=StatutDemande.TRAITE)))
