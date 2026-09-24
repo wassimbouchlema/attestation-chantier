@@ -47,7 +47,7 @@ class RelanceDemandeEndpointTests(APITestCase):
         return reverse("demande-relancer", kwargs={"pk": (demande or self.demande).pk})
 
     def _figer_maintenant(self, instant):
-        return patch("demandes.views.distributeur.timezone.now", return_value=instant)
+        return patch("demandes.services.demandes.relance.timezone.now", return_value=instant)
 
     # --- Succès ---
 
@@ -182,7 +182,7 @@ class RelanceDemandeEndpointTests(APITestCase):
     def test_echec_envoi_email_rollback_complet(self):
         self._authentifier(self.distributeur_a)
 
-        with patch("demandes.views.distributeur.EmailMessage.send", side_effect=RuntimeError("SMTP indisponible")):
+        with patch("demandes.services.demandes.relance.EmailMessage.send", side_effect=RuntimeError("SMTP indisponible")):
             response = self.client.post(self._url(), {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
@@ -190,3 +190,71 @@ class RelanceDemandeEndpointTests(APITestCase):
         self.assertIsNone(self.demande.last_relance_at)
         self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
         self.assertEqual(len(mail.outbox), 0)
+
+    # --- Configuration SIÈGE ambiguë ---
+
+    def test_relance_sans_compte_siege_configure_retourne_500(self):
+        self.siege.delete()
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.post(self._url(), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(
+            response.data,
+            {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
+        )
+        self.assertEqual(len(mail.outbox), 0)
+        self.demande.refresh_from_db()
+        self.assertIsNone(self.demande.last_relance_at)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+
+    def test_relance_plusieurs_comptes_siege_configure_retourne_500(self):
+        Utilisateur.objects.create_user(
+            username="siege_relance_bis",
+            password="test1234",
+            role=Role.SIEGE,
+            email="siege-bis@attestation-chantier.local",
+        )
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.post(self._url(), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(
+            response.data,
+            {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
+        )
+        self.assertEqual(len(mail.outbox), 0)
+        self.demande.refresh_from_db()
+        self.assertIsNone(self.demande.last_relance_at)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+
+    # --- Email envoyé puis échec tardif : incohérence actuelle, volontairement figée ---
+
+    def test_email_envoye_puis_echec_sauvegarde_demande(self):
+        self._authentifier(self.distributeur_a)
+
+        with patch("demandes.models.Demande.save", side_effect=RuntimeError("Panne sauvegarde")):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self._url(), {}, format="json")
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.demande.refresh_from_db()
+        self.assertIsNone(self.demande.last_relance_at)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+
+    def test_email_envoye_puis_echec_notification(self):
+        self._authentifier(self.distributeur_a)
+
+        with patch(
+            "demandes.services.demandes.relance.Notification.objects.create",
+            side_effect=RuntimeError("Panne notification"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self._url(), {}, format="json")
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.demande.refresh_from_db()
+        self.assertIsNone(self.demande.last_relance_at)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())

@@ -1,9 +1,11 @@
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -11,6 +13,7 @@ from comptes.models import Role, Utilisateur
 
 from ..models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
 from ..rules import (
+    DELAI_RELANCE,
     PIECE_ACTIVITE,
     PIECE_COMPLEXITE,
     PIECE_MONTANT,
@@ -19,6 +22,7 @@ from ..rules import (
     PIECE_USAGE,
     calculer_pieces_requises,
     est_demande_modifiable,
+    prochaine_relance_autorisee_at,
 )
 
 
@@ -552,3 +556,17 @@ class EstDemandeModifiableTests(SimpleTestCase):
 
     def test_traite_nest_pas_modifiable(self):
         self.assertFalse(est_demande_modifiable(Demande(statut=StatutDemande.TRAITE)))
+
+
+class ProchaineRelanceAutoriseeAtTests(SimpleTestCase):
+    def test_aucune_relance_precedente_retourne_none(self):
+        self.assertIsNone(prochaine_relance_autorisee_at(Demande(last_relance_at=None)))
+
+    def test_derniere_relance_connue_ajoute_le_delai(self):
+        derniere = timezone.now()
+
+        self.assertEqual(
+            prochaine_relance_autorisee_at(Demande(last_relance_at=derniere)),
+            derniere + DELAI_RELANCE,
+        )
+        self.assertEqual(DELAI_RELANCE, timedelta(hours=24))

@@ -8,9 +8,12 @@ rend utilisable sur un brouillon partiel (valeurs `None`/`""`) comme sur une
 instance non sauvegardée en test.
 """
 
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from .models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
+
+DELAI_RELANCE = timedelta(hours=24)
 
 PIECE_STRUCTURE = "structure"
 PIECE_USAGE = "usage"
@@ -70,3 +73,9 @@ def calculer_pieces_manquantes(pieces_requises: list[str], pieces_presentes) -> 
 
 def est_demande_modifiable(demande: Demande) -> bool:
     return demande.statut == StatutDemande.BROUILLON
+
+
+def prochaine_relance_autorisee_at(demande: Demande) -> datetime | None:
+    if demande.last_relance_at is None:
+        return None
+    return demande.last_relance_at + DELAI_RELANCE
