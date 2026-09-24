@@ -28,7 +28,6 @@ from ..models import (
 )
 from ..projet_attestation import generer_contenu_initial
 from ..projet_attestation_pdf import generer_pdf
-from ..rules import calculer_pieces_manquantes, calculer_pieces_requises
 from ..schema_docs import (
     DEMANDE_NON_TRAITABLE,
     TAG_ATTESTATION,
@@ -45,7 +44,9 @@ from ..serializers import (
     RefuserDemandeSerializer,
 )
 from ..serializers.attestation import AttestationSerializer, SiegeDemandeDetailSerializer
-from .distributeur import DemandePagination
+from ..services.pieces import etat_dossier_pieces
+from .pagination import DemandePagination
+from .telechargements import reponse_fdr_pdf
 
 
 @extend_schema_view(
@@ -383,17 +384,8 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
     def pieces(self, request, pk=None):
         demande = self.get_object()
         pieces = demande.pieces.all()
-        pieces_requises = calculer_pieces_requises(demande.fdr)
-        pieces_presentes = {piece.type_piece for piece in pieces}
-        pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
-
         return Response(
-            {
-                "pieces": PieceJustificativeSerializer(pieces, many=True).data,
-                "pieces_requises": pieces_requises,
-                "pieces_manquantes": pieces_manquantes,
-                "dossier_complet": not pieces_manquantes,
-            }
+            etat_dossier_pieces(demande.fdr, pieces, PieceJustificativeSerializer(pieces, many=True).data)
         )
 
     @extend_schema(
@@ -422,16 +414,7 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
     )
     @action(detail=True, methods=["get"], url_path="fdr-pdf")
     def fdr_pdf(self, request, pk=None):
-        demande = self.get_object()
-        if not demande.fdr_pdf:
-            return Response({"detail": "Aucun document généré pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
-
-        return FileResponse(
-            demande.fdr_pdf.open("rb"),
-            content_type="application/pdf",
-            as_attachment=False,
-            filename=f"FDR-{demande.id}.pdf",
-        )
+        return reponse_fdr_pdf(self.get_object())
 
 
 class SiegePieceJustificativeViewSet(viewsets.GenericViewSet):

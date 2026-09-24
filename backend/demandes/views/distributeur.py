@@ -18,7 +18,6 @@ from drf_spectacular.utils import (
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from comptes.permissions import IsDistributeur
@@ -63,7 +62,10 @@ from ..serializers import (
     PieceJustificativeSerializer,
     ProjetAttestationSerializer,
 )
+from ..services.pieces import etat_dossier_pieces
 from ..validation_envoi import valider_fdr_pret_a_envoyer
+from .pagination import DemandePagination
+from .telechargements import reponse_fdr_pdf
 
 TITRE_DEMANDE_ENVOYEE = "Nouvelle demande reçue"
 MESSAGE_DEMANDE_ENVOYEE = "Une nouvelle demande d'attestation de chantier a été envoyée."
@@ -78,10 +80,6 @@ DECISION_EN_ATTENTE = "EN_ATTENTE"
 COMPLEMENTS_DEMANDES = "DEMANDES"
 COMPLEMENTS_AUCUN = "AUCUN"
 FILTRES_COMPLEMENTS = (COMPLEMENTS_DEMANDES, COMPLEMENTS_AUCUN)
-
-
-class DemandePagination(PageNumberPagination):
-    page_size = 10
 
 
 @extend_schema_view(
@@ -197,6 +195,14 @@ class DemandeViewSet(
             return ExtractionDocumentSerializer
         return DemandeSerializer
 
+    def _refuser_hors_brouillon(self, demande):
+        if demande.statut != StatutDemande.BROUILLON:
+            return Response(
+                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return None
+
     @extend_schema(
         tags=[TAG_DEMANDES],
         summary="Créer une demande (brouillon)",
@@ -287,11 +293,9 @@ class DemandeViewSet(
     )
     def destroy(self, request, *args, **kwargs):
         demande = self.get_object()
-        if demande.statut != StatutDemande.BROUILLON:
-            return Response(
-                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
-                status=status.HTTP_409_CONFLICT,
-            )
+        conflit = self._refuser_hors_brouillon(demande)
+        if conflit is not None:
+            return conflit
 
         for piece in demande.pieces.all():
             piece.fichier.delete(save=False)
@@ -333,11 +337,9 @@ class DemandeViewSet(
             serializer = self.get_serializer(demande.fdr)
             return Response(serializer.data)
 
-        if demande.statut != StatutDemande.BROUILLON:
-            return Response(
-                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
-                status=status.HTTP_409_CONFLICT,
-            )
+        conflit = self._refuser_hors_brouillon(demande)
+        if conflit is not None:
+            return conflit
 
         serializer = self.get_serializer(demande.fdr, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -375,11 +377,9 @@ class DemandeViewSet(
     @action(detail=True, methods=["patch"], url_path="commentaire")
     def commentaire(self, request, pk=None):
         demande = self.get_object()
-        if demande.statut != StatutDemande.BROUILLON:
-            return Response(
-                {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
-                status=status.HTTP_409_CONFLICT,
-            )
+        conflit = self._refuser_hors_brouillon(demande)
+        if conflit is not None:
+            return conflit
 
         serializer = self.get_serializer(demande, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -399,16 +399,7 @@ class DemandeViewSet(
     )
     @action(detail=True, methods=["get"], url_path="fdr-pdf")
     def fdr_pdf(self, request, pk=None):
-        demande = self.get_object()
-        if not demande.fdr_pdf:
-            return Response({"detail": "Aucun document généré pour cette demande."}, status=status.HTTP_404_NOT_FOUND)
-
-        return FileResponse(
-            demande.fdr_pdf.open("rb"),
-            content_type="application/pdf",
-            as_attachment=False,
-            filename=f"FDR-{demande.id}.pdf",
-        )
+        return reponse_fdr_pdf(self.get_object())
 
     @extend_schema(
         tags=[TAG_ATTESTATION],
@@ -466,11 +457,9 @@ class DemandeViewSet(
                 pk=pk,
             )
 
-            if demande.statut != StatutDemande.BROUILLON:
-                return Response(
-                    {"detail": "Cette demande n'est plus modifiable (statut différent de BROUILLON)."},
-                    status=status.HTTP_409_CONFLICT,
-                )
+            conflit = self._refuser_hors_brouillon(demande)
+            if conflit is not None:
+                return conflit
 
             erreurs_fdr = valider_fdr_pret_a_envoyer(demande.fdr)
             if erreurs_fdr:
@@ -774,17 +763,8 @@ class PieceJustificativeViewSet(viewsets.GenericViewSet):
     def list(self, request, *args, **kwargs):
         demande = self._get_demande()
         pieces = PieceJustificative.objects.filter(demande=demande)
-        pieces_requises = calculer_pieces_requises(demande.fdr)
-        pieces_presentes = {piece.type_piece for piece in pieces}
-        pieces_manquantes = calculer_pieces_manquantes(pieces_requises, pieces_presentes)
-
         return Response(
-            {
-                "pieces": self.get_serializer(pieces, many=True).data,
-                "pieces_requises": pieces_requises,
-                "pieces_manquantes": pieces_manquantes,
-                "dossier_complet": not pieces_manquantes,
-            }
+            etat_dossier_pieces(demande.fdr, pieces, self.get_serializer(pieces, many=True).data)
         )
 
     @extend_schema(
