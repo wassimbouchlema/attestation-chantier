@@ -79,3 +79,7 @@ def prochaine_relance_autorisee_at(demande: Demande) -> datetime | None:
     if demande.last_relance_at is None:
         return None
     return demande.last_relance_at + DELAI_RELANCE
+
+
+def est_demande_traitable(demande: Demande) -> bool:
+    return demande.statut == StatutDemande.EN_COURS and demande.decision is None

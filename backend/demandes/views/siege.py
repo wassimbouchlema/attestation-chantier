@@ -1,10 +1,9 @@
 import mimetypes
 
-from django.core.files.base import ContentFile
 from django.db import transaction
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
+from django.utils.translation import gettext as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view, inline_serializer
 from rest_framework import mixins, serializers, status, viewsets
@@ -28,6 +27,7 @@ from ..models import (
 )
 from ..projet_attestation import generer_contenu_initial
 from ..projet_attestation_pdf import generer_pdf
+from ..rules import est_demande_traitable
 from ..schema_docs import (
     DEMANDE_NON_TRAITABLE,
     TAG_ATTESTATION,
@@ -44,6 +44,12 @@ from ..serializers import (
     RefuserDemandeSerializer,
 )
 from ..serializers.attestation import AttestationSerializer, SiegeDemandeDetailSerializer
+from ..services.attestations.validation import (
+    AttestationDejaValidee,
+    AttestationVide,
+    DemandeNonTraitable,
+    valider_attestation as valider_attestation_service,
+)
 from ..services.pieces import etat_dossier_pieces
 from .pagination import DemandePagination
 from .telechargements import reponse_fdr_pdf
@@ -81,7 +87,7 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         return Demande.objects.filter(statut=StatutDemande.EN_COURS).select_related("distributeur", "fdr", "attestation")
 
     def _conflit_traitement(self, demande, *, verifier_complement_actif=False):
-        if demande.statut != StatutDemande.EN_COURS or demande.decision is not None:
+        if not est_demande_traitable(demande):
             return Response(
                 {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
                 status=status.HTTP_409_CONFLICT,
@@ -214,48 +220,29 @@ class SiegeDemandeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
     )
     @action(detail=True, methods=["post"], url_path="attestation/valider")
     def valider_attestation(self, request, pk=None):
-        nom_pdf = None
-        stockage = Attestation._meta.get_field("pdf_final").storage
         try:
-            with transaction.atomic():
-                demande = get_object_or_404(
-                    Demande.objects.select_for_update(of=("self",)).select_related("fdr", "distributeur"), pk=pk
-                )
-                attestation = get_object_or_404(Attestation.objects.select_for_update(), demande=demande)
-                if attestation.validated_at is not None:
-                    return Response(
-                        {"code": "ATTESTATION_DEJA_VALIDEE", "detail": "Cette attestation est déjà validée."},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-                conflit = self._conflit_traitement(demande)
-                if conflit is not None:
-                    return conflit
-                contenu = nettoyer_html(attestation.contenu_html)
-                if not contenu.strip():
-                    return Response(
-                        {"code": "ATTESTATION_VIDE", "detail": "L'attestation est vide et ne peut pas être validée."},
-                        status=status.HTTP_409_CONFLICT,
-                    )
-                pdf = generer_pdf(demande, contenu, definitif=True)
-                attestation.pdf_final.save(f"attestation-definitive-{demande.id}.pdf", ContentFile(pdf), save=False)
-                nom_pdf = attestation.pdf_final.name
-                attestation.validated_at = timezone.now()
-                attestation.save(update_fields=["pdf_final", "validated_at", "updated_at"])
-                demande.decision = DecisionDemande.ACCEPTEE
-                demande.statut = StatutDemande.TRAITE
-                demande.save(update_fields=["decision", "statut", "updated_at"])
-                Notification.objects.create(
-                    destinataire=demande.distributeur,
-                    demande=demande,
-                    type_notification=TypeNotification.DEMANDE_ACCEPTEE,
-                    titre="Demande acceptée",
-                    message="Votre demande a été acceptée. L'attestation définitive est disponible.",
-                )
-                return Response(self.get_serializer(demande).data)
-        except Exception:
-            if nom_pdf:
-                stockage.delete(nom_pdf)
-            raise
+            demande = valider_attestation_service(pk)
+        except Demande.DoesNotExist:
+            raise Http404(_("No %s matches the given query.") % Demande._meta.object_name)
+        except Attestation.DoesNotExist:
+            raise Http404(_("No %s matches the given query.") % Attestation._meta.object_name)
+        except AttestationDejaValidee:
+            return Response(
+                {"code": "ATTESTATION_DEJA_VALIDEE", "detail": "Cette attestation est déjà validée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except DemandeNonTraitable:
+            return Response(
+                {"code": "DEMANDE_NON_TRAITABLE", "detail": "Cette demande ne peut plus être traitée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except AttestationVide:
+            return Response(
+                {"code": "ATTESTATION_VIDE", "detail": "L'attestation est vide et ne peut pas être validée."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(self.get_serializer(demande).data)
 
     @extend_schema(
         tags=[TAG_ATTESTATION],

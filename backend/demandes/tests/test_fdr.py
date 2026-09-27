@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
 
-from ..models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
+from ..models import DecisionDemande, Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
 from ..rules import (
     DELAI_RELANCE,
     PIECE_ACTIVITE,
@@ -22,6 +22,7 @@ from ..rules import (
     PIECE_USAGE,
     calculer_pieces_requises,
     est_demande_modifiable,
+    est_demande_traitable,
     prochaine_relance_autorisee_at,
 )
 
@@ -570,3 +571,23 @@ class ProchaineRelanceAutoriseeAtTests(SimpleTestCase):
             derniere + DELAI_RELANCE,
         )
         self.assertEqual(DELAI_RELANCE, timedelta(hours=24))
+
+
+class EstDemandeTraitableTests(SimpleTestCase):
+    def test_en_cours_sans_decision_est_traitable(self):
+        self.assertTrue(
+            est_demande_traitable(Demande(statut=StatutDemande.EN_COURS, decision=None))
+        )
+
+    def test_en_cours_avec_decision_nest_pas_traitable(self):
+        self.assertFalse(
+            est_demande_traitable(
+                Demande(statut=StatutDemande.EN_COURS, decision=DecisionDemande.ACCEPTEE)
+            )
+        )
+
+    def test_brouillon_nest_pas_traitable(self):
+        self.assertFalse(est_demande_traitable(Demande(statut=StatutDemande.BROUILLON)))
+
+    def test_traite_nest_pas_traitable(self):
+        self.assertFalse(est_demande_traitable(Demande(statut=StatutDemande.TRAITE)))
