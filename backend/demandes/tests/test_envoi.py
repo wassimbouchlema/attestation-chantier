@@ -373,7 +373,7 @@ class EnvoiDemandeEndpointTests(APITestCase):
         self._authentifier(self.distributeur_a)
 
         with patch(
-            "demandes.views.distributeur.Notification.objects.create",
+            "demandes.services.demandes.envoi.Notification.objects.create",
             side_effect=RuntimeError("Panne notification"),
         ):
             with self.assertRaises(RuntimeError):
