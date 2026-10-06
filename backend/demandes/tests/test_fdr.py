@@ -1,16 +1,19 @@
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from comptes.models import Role, Utilisateur
 
-from ..models import Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
+from ..models import DecisionDemande, Demande, FormulaireRisque, StatutDemande, TypeChantier, Usage
 from ..rules import (
+    DELAI_RELANCE,
     PIECE_ACTIVITE,
     PIECE_COMPLEXITE,
     PIECE_MONTANT,
@@ -18,6 +21,9 @@ from ..rules import (
     PIECE_TRAVAUX,
     PIECE_USAGE,
     calculer_pieces_requises,
+    est_demande_modifiable,
+    est_demande_traitable,
+    prochaine_relance_autorisee_at,
 )
 
 
@@ -540,3 +546,48 @@ class CalculerPiecesRequisesTests(SimpleTestCase):
                 PIECE_TRAVAUX,
             ],
         )
+
+
+class EstDemandeModifiableTests(SimpleTestCase):
+    def test_brouillon_est_modifiable(self):
+        self.assertTrue(est_demande_modifiable(Demande(statut=StatutDemande.BROUILLON)))
+
+    def test_en_cours_nest_pas_modifiable(self):
+        self.assertFalse(est_demande_modifiable(Demande(statut=StatutDemande.EN_COURS)))
+
+    def test_traite_nest_pas_modifiable(self):
+        self.assertFalse(est_demande_modifiable(Demande(statut=StatutDemande.TRAITE)))
+
+
+class ProchaineRelanceAutoriseeAtTests(SimpleTestCase):
+    def test_aucune_relance_precedente_retourne_none(self):
+        self.assertIsNone(prochaine_relance_autorisee_at(Demande(last_relance_at=None)))
+
+    def test_derniere_relance_connue_ajoute_le_delai(self):
+        derniere = timezone.now()
+
+        self.assertEqual(
+            prochaine_relance_autorisee_at(Demande(last_relance_at=derniere)),
+            derniere + DELAI_RELANCE,
+        )
+        self.assertEqual(DELAI_RELANCE, timedelta(hours=24))
+
+
+class EstDemandeTraitableTests(SimpleTestCase):
+    def test_en_cours_sans_decision_est_traitable(self):
+        self.assertTrue(
+            est_demande_traitable(Demande(statut=StatutDemande.EN_COURS, decision=None))
+        )
+
+    def test_en_cours_avec_decision_nest_pas_traitable(self):
+        self.assertFalse(
+            est_demande_traitable(
+                Demande(statut=StatutDemande.EN_COURS, decision=DecisionDemande.ACCEPTEE)
+            )
+        )
+
+    def test_brouillon_nest_pas_traitable(self):
+        self.assertFalse(est_demande_traitable(Demande(statut=StatutDemande.BROUILLON)))
+
+    def test_traite_nest_pas_traitable(self):
+        self.assertFalse(est_demande_traitable(Demande(statut=StatutDemande.TRAITE)))

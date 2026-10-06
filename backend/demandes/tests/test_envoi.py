@@ -2,6 +2,8 @@ import shutil
 import tempfile
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -303,6 +305,17 @@ class EnvoiDemandeEndpointTests(APITestCase):
         self.demande.refresh_from_db()
         self.assertEqual(self.demande.statut, StatutDemande.BROUILLON)
 
+    def test_envoi_404_conserve_le_message_de_get_object_or_404(self):
+        self._completer_fdr()
+        self._authentifier(self.distributeur_b)
+
+        response = self.client.post(self._url_envoyer(self.demande), {}, format="json")
+
+        self.assertEqual(
+            response.data,
+            {"detail": "Aucun objet Demande ne correspond à cette requête."},
+        )
+
     def test_envoi_anonyme_recoit_401(self):
         response = self.client.post(self._url_envoyer(self.demande), {}, format="json")
 
@@ -327,6 +340,69 @@ class EnvoiDemandeEndpointTests(APITestCase):
         self.demande.refresh_from_db()
         self.assertEqual(self.demande.statut, StatutDemande.BROUILLON)
         self.assertFalse(self.demande.fdr_pdf)
+
+    def test_envoi_plusieurs_comptes_siege_configure_retourne_500(self):
+        Utilisateur.objects.create_user(
+            username="siege_envoi_bis", password="test1234", role=Role.SIEGE
+        )
+        self._completer_fdr()
+        self._authentifier(self.distributeur_a)
+
+        response = self.client.post(self._url_envoyer(self.demande), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(
+            response.data,
+            {"detail": "Configuration serveur invalide : compte SIÈGE introuvable ou ambigu."},
+        )
+        self.demande.refresh_from_db()
+        self.assertEqual(self.demande.statut, StatutDemande.BROUILLON)
+        self.assertIsNone(self.demande.envoye_at)
+        self.assertFalse(self.demande.fdr_pdf)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+        self.assertTrue(self._aucun_fichier_fdr_pdf(self.demande))
+
+    # --- Envoi : échec tardif (fichier déjà écrit, transaction non aboutie) ---
+
+    def _aucun_fichier_fdr_pdf(self, demande):
+        dossier = Path(self._media_root_tmp) / "fdr-pdf" / str(demande.id)
+        return not dossier.exists() or not any(dossier.iterdir())
+
+    def test_envoi_echec_notification_annule_transaction_et_supprime_le_fichier(self):
+        self._completer_fdr()
+        self._authentifier(self.distributeur_a)
+
+        with patch(
+            "demandes.services.demandes.envoi.Notification.objects.create",
+            side_effect=RuntimeError("Panne notification"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self._url_envoyer(self.demande), {}, format="json")
+
+        self.demande.refresh_from_db()
+        self.assertEqual(self.demande.statut, StatutDemande.BROUILLON)
+        self.assertIsNone(self.demande.envoye_at)
+        self.assertFalse(self.demande.fdr_pdf)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+        self.assertTrue(self._aucun_fichier_fdr_pdf(self.demande))
+
+    def test_envoi_echec_sauvegarde_demande_annule_transaction_et_supprime_le_fichier(self):
+        self._completer_fdr()
+        self._authentifier(self.distributeur_a)
+
+        with patch(
+            "demandes.models.Demande.save",
+            side_effect=RuntimeError("Panne sauvegarde"),
+        ):
+            with self.assertRaises(RuntimeError):
+                self.client.post(self._url_envoyer(self.demande), {}, format="json")
+
+        self.demande.refresh_from_db()
+        self.assertEqual(self.demande.statut, StatutDemande.BROUILLON)
+        self.assertIsNone(self.demande.envoye_at)
+        self.assertFalse(self.demande.fdr_pdf)
+        self.assertFalse(Notification.objects.filter(demande=self.demande).exists())
+        self.assertTrue(self._aucun_fichier_fdr_pdf(self.demande))
 
     # --- PDF ---
 

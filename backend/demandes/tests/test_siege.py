@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from comptes.models import Role, Utilisateur
 
 from ..models import Demande, FormulaireRisque, PieceJustificative, ProjetAttestation, StatutDemande
+from ..rules import PIECE_COMPLEXITE
 
 
 class SiegeDemandeEndpointTests(APITestCase):
@@ -142,6 +143,21 @@ class SiegeDemandeEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("pieces", response.data)
         self.assertIn("dossier_complet", response.data)
+
+    def test_siege_pieces_reflete_les_regles_requises_et_manquantes(self):
+        self.demande_en_cours.fdr.chantier_atypique = True
+        self.demande_en_cours.fdr.save(update_fields=["chantier_atypique"])
+        self._authentifier(self.siege)
+
+        response = self.client.get(
+            reverse("siege-demande-pieces", kwargs={"pk": self.demande_en_cours.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["pieces"], [])
+        self.assertEqual(response.data["pieces_requises"], [PIECE_COMPLEXITE])
+        self.assertEqual(response.data["pieces_manquantes"], [PIECE_COMPLEXITE])
+        self.assertFalse(response.data["dossier_complet"])
 
     def test_siege_consulte_levaluation_du_risque(self):
         self._authentifier(self.siege)

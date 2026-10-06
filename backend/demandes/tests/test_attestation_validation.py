@@ -176,7 +176,7 @@ class ValidationAttestationTests(APITestCase):
         self.assertIsNone(detail.data["attestation_finale"])
 
     def test_echec_generation_pdf(self):
-        with mock.patch("demandes.views.siege.generer_pdf", side_effect=RuntimeError("boom")):
+        with mock.patch("demandes.services.attestations.validation.generer_pdf", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 self.valider()
         self.verifier_non_valide()
@@ -184,6 +184,32 @@ class ValidationAttestationTests(APITestCase):
     def test_echec_apres_ecriture_supprime_le_fichier(self):
         stockage = Attestation._meta.get_field("pdf_final").storage
         with mock.patch("demandes.views.siege.Notification.objects.create", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                self.valider()
+        self.verifier_non_valide()
+        self.assertFalse(stockage.exists(f"attestations/attestation-definitive-{self.demande.id}.pdf"))
+
+    def test_echec_ecriture_fichier(self):
+        stockage = Attestation._meta.get_field("pdf_final").storage
+        with mock.patch(
+            "django.db.models.fields.files.FieldFile.save", side_effect=RuntimeError("stockage indisponible")
+        ):
+            with self.assertRaises(RuntimeError):
+                self.valider()
+        self.verifier_non_valide()
+        self.assertFalse(stockage.exists(f"attestations/attestation-definitive-{self.demande.id}.pdf"))
+
+    def test_fichier_ecrit_puis_echec_attestation_save(self):
+        stockage = Attestation._meta.get_field("pdf_final").storage
+        with mock.patch("demandes.models.Attestation.save", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                self.valider()
+        self.verifier_non_valide()
+        self.assertFalse(stockage.exists(f"attestations/attestation-definitive-{self.demande.id}.pdf"))
+
+    def test_fichier_et_attestation_ecrits_puis_echec_demande_save(self):
+        stockage = Attestation._meta.get_field("pdf_final").storage
+        with mock.patch("demandes.models.Demande.save", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
                 self.valider()
         self.verifier_non_valide()
